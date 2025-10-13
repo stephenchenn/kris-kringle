@@ -1,0 +1,30 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Kris Kringle Draw</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <main class="container">
+      <h1 id="title">Kris Kringle</h1>
+      <div id="status" class="card">
+        <p id="hello"></p>
+        <p><b>Event:</b> <span id="eventName"></span></p>
+        <p><b>Gifts per person:</b> <span id="gpp"></span></p>
+        <div>
+          <b>Your recipients:</b>
+          <ul id="recipients"></ul>
+          <p id="none" class="muted" style="display:none;"><i>None yet</i></p>
+        </div>
+      </div>
+
+      <button id="drawBtn" disabled>Draw now</button>
+      <p id="note" class="muted"></p>
+      <p id="error" class="error"></p>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>

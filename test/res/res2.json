@@ -1,0 +1,59 @@
+{
+  "event": {
+    "id": "bf273965-1d17-4908-a25f-dbc2a3f9832d",
+    "name": "wong's christmas 2025",
+    "gifts_per_person": 2
+  },
+  "invites": [
+    {
+      "name": "stephen1",
+      "email": "chen.stephen151@gmail.com",
+      "link": "http://localhost:3000/draw?token=e44c9486-7fb6-4c19-8d36-f06f03840201"
+    },
+    {
+      "name": "stephen2",
+      "email": "chen.stephen141@gmail.com",
+      "link": "http://localhost:3000/draw?token=650a523d-d222-4454-9382-517f831f0b10"
+    },
+    {
+      "name": "Alice",
+      "email": "alice@example.com",
+      "link": "http://localhost:3000/draw?token=7dd60611-885b-4236-a7ad-7224cbbb86f7"
+    },
+    {
+      "name": "Bob",
+      "email": "bob@example.com",
+      "link": "http://localhost:3000/draw?token=b03f6286-96a5-49ad-9b8a-4fd27321addf"
+    },
+    {
+      "name": "Carol",
+      "email": "carol@example.com",
+      "link": "http://localhost:3000/draw?token=eb9f7ae2-8772-411e-8386-983e3c327809"
+    },
+    {
+      "name": "Dave",
+      "email": "dave@example.com",
+      "link": "http://localhost:3000/draw?token=8e5003e0-c7dc-45d7-931d-f99370696c3b"
+    },
+    {
+      "name": "Eve",
+      "email": "eve@example.com",
+      "link": "http://localhost:3000/draw?token=2982968a-2f3e-4294-838d-6b73edfe3ec0"
+    },
+    {
+      "name": "Frank",
+      "email": "frank@example.com",
+      "link": "http://localhost:3000/draw?token=b346d634-cbed-44b7-ada7-13f2a6b9cd0b"
+    },
+    {
+      "name": "Grace",
+      "email": "grace@example.com",
+      "link": "http://localhost:3000/draw?token=89ff7e96-4c94-485f-8218-765b74230af6"
+    },
+    {
+      "name": "Heidi",
+      "email": "heidi@example.com",
+      "link": "http://localhost:3000/draw?token=3f5ff285-fc9e-45fd-8a66-f113f76a559d"
+    }
+  ]
+}
