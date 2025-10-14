@@ -1,0 +1,59 @@
+{
+    "event": {
+        "id": "d772c449-4a3d-4b69-95af-19ba72a9b9f0",
+        "name": "wong's christmas 2025",
+        "gifts_per_person": 2
+    },
+    "invites": [
+        {
+            "name": "stephen1",
+            "email": "chen.stephen151@gmail.com",
+            "link": "http://localhost:3000/draw?token=c013163a-d410-492e-ad3d-fb06dae04510"
+        },
+        {
+            "name": "stephen2",
+            "email": "chen.stephen141@gmail.com",
+            "link": "http://localhost:3000/draw?token=427b9c6d-c9f4-4a9e-9078-c0f4a774d272"
+        },
+        {
+            "name": "Alice",
+            "email": "alice@example.com",
+            "link": "http://localhost:3000/draw?token=f8fb2250-cf41-4db6-a410-885d5f421785"
+        },
+        {
+            "name": "Bob",
+            "email": "bob@example.com",
+            "link": "http://localhost:3000/draw?token=c648d424-54aa-4336-9866-b0901727f461"
+        },
+        {
+            "name": "Carol",
+            "email": "carol@example.com",
+            "link": "http://localhost:3000/draw?token=3c67659a-9b87-44ef-9535-693d03844f52"
+        },
+        {
+            "name": "Dave",
+            "email": "dave@example.com",
+            "link": "http://localhost:3000/draw?token=9d3509c6-5643-4649-9478-df9aeea7e6cd"
+        },
+        {
+            "name": "Eve",
+            "email": "eve@example.com",
+            "link": "http://localhost:3000/draw?token=9154f4de-0df4-41d0-9fd9-51ca947daedd"
+        },
+        {
+            "name": "Frank",
+            "email": "frank@example.com",
+            "link": "http://localhost:3000/draw?token=cd18ae86-62f7-46d9-8592-2f279e853508"
+        },
+        {
+            "name": "Grace",
+            "email": "grace@example.com",
+            "link": "http://localhost:3000/draw?token=65d992fa-68d1-4dcd-b473-b9b62ba1269b"
+        },
+        {
+            "name": "Heidi",
+            "email": "heidi@example.com",
+            "link": "http://localhost:3000/draw?token=7cedc6be-06a6-47ae-b09e-74e3928f7eed"
+        }
+    ]
+}

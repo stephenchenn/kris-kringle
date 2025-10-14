@@ -145,7 +145,18 @@ app.get("/api/me", (req, res) => {
   });
 });
 
-// --- API: draw ---
+// Count how many gifts each recipient already has in this event
+function recipientCounts(event_id) {
+  const rows = db.prepare(`
+    SELECT recipient_id AS id, COUNT(*) AS c
+    FROM assignments
+    WHERE event_id = ?
+    GROUP BY recipient_id
+  `).all(event_id);
+  const map = new Map(rows.map(r => [r.id, Number(r.c)]));
+  return map;
+}
+
 app.post("/api/draw", async (req, res) => {
   const { token } = req.body || {};
   if (!token) return res.status(400).json({ error: "Missing token" });
@@ -155,40 +166,52 @@ app.post("/api/draw", async (req, res) => {
 
   const giftsPerPerson = me.gifts_per_person;
   const existing = getRecipientsForGiver(me.event_id, me.id);
-
   if (existing.length >= giftsPerPerson) {
     return res.json({ ok: true, recipients: existing.map((r) => r.name) });
   }
 
   const participants = listParticipants(me.event_id);
-  const candidates = shuffle(participants.filter((p) => p.id !== me.id));
+  const candidates = participants.filter((p) => p.id !== me.id);
+
+  // ---- NEW: balance by current recipient load
+  const counts = recipientCounts(me.event_id);
+  // sort: least-assigned first, then random to break ties
+  const sorted = shuffle(candidates).sort((a, b) => {
+    const ca = counts.get(a.id) || 0;
+    const cb = counts.get(b.id) || 0;
+    return ca - cb;
+  });
 
   const alreadyIds = new Set(existing.map((x) => x.id));
   const need = giftsPerPerson - existing.length;
   const chosen = [];
-  for (const c of candidates) {
+
+  for (const c of sorted) {
     if (chosen.length >= need) break;
-    if (alreadyIds.has(c.id)) continue;
-    // Try insert; if unique constraint hits, skip
+    const rc = counts.get(c.id) || 0;
+    if (rc >= giftsPerPerson) continue;        // hit the cap, skip
+    if (alreadyIds.has(c.id)) continue;        // giver already has this recipient
+
     try {
       db.prepare(
         `INSERT INTO assignments (id, event_id, giver_id, recipient_id) VALUES (?,?,?,?)`
       ).run(randomUUID(), me.event_id, me.id, c.id);
+
+      counts.set(c.id, rc + 1); // update live so later picks stay balanced
       chosen.push(c);
     } catch {
-      // unique constraint or race — just skip
+      // unique/race => skip
     }
   }
+  // ---- END NEW
 
   const after = getRecipientsForGiver(me.event_id, me.id);
-  // Mark has_drawn if they now have at least 1 assignment
   if (after.length > 0 && !me.has_drawn) {
     db.prepare(`UPDATE participants SET has_drawn = 1 WHERE id = ?`).run(me.id);
   }
 
   const names = after.map((r) => r.name);
 
-  // send email (fire-and-forget; don't fail the draw if email fails)
   try {
     await sendAssignmentEmail({
       to: me.email,

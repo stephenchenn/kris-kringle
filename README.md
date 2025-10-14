@@ -1,3 +1,4 @@
+1. Seed:
 curl -X POST http://localhost:3000/api/admin/seed \
   -H "Content-Type: application/json" \
   -d @- <<'JSON'
@@ -19,3 +20,12 @@ curl -X POST http://localhost:3000/api/admin/seed \
   ]
 }
 JSON
+
+
+1. Do the draw
+curl -X POST http://localhost:3000/api/draw \
+  -H "Content-Type: application/json" \
+  -d '{"token":"<paste-one-token>"}'
+
+2. Check your identity + current recipients
+curl "http://localhost:3000/api/me?token=<paste-one-token>"
