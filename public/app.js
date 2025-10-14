@@ -68,6 +68,9 @@
       const d = await r.json();
       if (!r.ok) {
         errorEl.textContent = d.error || "Draw failed";
+      } else {
+        // ✅ Fire confetti once on success
+        if (window.triggerConfetti) window.triggerConfetti(0); // try other theme indexes if you like
       }
       await loadMe();
     } catch (e) {
@@ -79,4 +82,25 @@
 
   drawBtn.addEventListener("click", draw);
   loadMe();
+
+  const resendBtn = document.getElementById("resendBtn");
+  resendBtn.addEventListener("click", async () => {
+    resendBtn.disabled = true;
+    errorEl.textContent = "";
+    try {
+      const r = await fetch("/api/resend", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Resend failed");
+      note.textContent = "Email sent. Check your inbox.";
+    } catch (e) {
+      errorEl.textContent = String(e);
+    } finally {
+      resendBtn.disabled = false;
+    }
+  });
+
 })();

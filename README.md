@@ -1,3 +1,6 @@
+Start Dev Server (http://localhost:3000):
+npm run dev
+
 1. Seed:
 curl -X POST http://localhost:3000/api/admin/seed \
   -H "Content-Type: application/json" \
@@ -19,19 +22,24 @@ curl -X POST http://localhost:3000/api/admin/seed \
 }
 JSON
 
-1. Do the draw
+2. 
+curl -X POST http://localhost:3000/api/admin/send-invites \
+  -H "Content-Type: application/json" \
+  -d '{"secret":"change-this-long-random-string","eventId":"<optional-event-id>"}'
+
+3. Each Recipients do the draw
 curl -X POST http://localhost:3000/api/draw \
   -H "Content-Type: application/json" \
   -d '{"token":"<paste-one-token>"}'
 
-2. Check your identity + current recipients
+4. Check your identity + current recipients
 curl "http://localhost:3000/api/me?token=<paste-one-token>"
 
 
 
 To Do:
-1. Resend func
-2. Send invites api
+1. Resend func ✅
+2. Send invites api ✅
 3. Confetti
 4. Deploy
 5. Test

@@ -55,8 +55,11 @@ CREATE INDEX IF NOT EXISTS idx_assignments_recipient ON assignments(event_id, re
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST,
   port: Number(process.env.SMTP_PORT || 587),
-  secure: false,
+  secure: Number(process.env.SMTP_PORT) === 465, // true for 465, false for 587/2525
   auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+  pool: true,
+  maxConnections: 3,
+  maxMessages: 100,
 });
 
 // --- Helpers ---
@@ -106,7 +109,7 @@ async function sendAssignmentEmail({
   eventName,
 }) {
   const html = `
-    <div style="font-family:Arial,Helvetica,sans-serif;font-size:16px">
+    <div style="font-family:Arial,Helvetica,sans-serif;font-size:16px;color:#111111 !important;">
       <p>Hi ${participantName},</p>
       <p>Your Kris Kringle recipients for <b>${eventName}</b> are:</p>
       <ul>${recipients.map((r) => `<li>${r}</li>`).join("")}</ul>
@@ -288,6 +291,70 @@ app.post("/api/admin/seed", (req, res) => {
     invites,
   });
 });
+
+app.post("/api/admin/send-invites", async (req, res) => {
+  const { secret, eventId } = req.body || {};
+  if (secret !== process.env.ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+
+  // pick event: use provided ID or the most recent
+  const evt = eventId ||
+    db.prepare(`SELECT id, name FROM events ORDER BY created_at DESC LIMIT 1`).get()?.id;
+  if (!evt) return res.status(404).json({ error: "No event found" });
+
+  const eventRow = db.prepare(`SELECT id, name, gifts_per_person FROM events WHERE id = ?`).get(evt);
+  const base = process.env.BASE_URL || "http://localhost:3000";
+  const people = db.prepare(`SELECT name, email, invite_token FROM participants WHERE event_id = ?`).all(evt);
+
+  const send = (to, subject, html) =>
+    transporter.sendMail({ from: process.env.FROM_EMAIL, to, subject, html });
+
+  let sent = 0, failed = [];
+  for (const p of people) {
+    const link = `${base}/draw?token=${p.invite_token}`;
+    const html = `
+      <div style="font-family:Arial,Helvetica,sans-serif;font-size:16px;color:#111111 !important;">
+        <p>Hi ${p.name},</p>
+        <p>You’re invited to join <b>${eventRow.name}</b>!</p>
+        <p>Click this link to draw your recipients: <a href="${link}">${link}</a></p>
+        <p>Each person gives <b>${eventRow.gifts_per_person}</b> gift(s).</p>
+        <p>Happy gifting! 🎁</p>
+      </div>
+    `;
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      await send(p.email, `You're invited: ${eventRow.name}`, html);
+      sent++;
+    } catch (e) {
+      failed.push({ email: p.email, error: e.message });
+    }
+  }
+
+  res.json({ ok: true, sent, failed });
+});
+
+app.post("/api/resend", async (req, res) => {
+  const { token } = req.body || {};
+  if (!token) return res.status(400).json({ error: "Missing token" });
+
+  const me = getParticipantByToken(token);
+  if (!me) return res.status(404).json({ error: "Invalid token" });
+
+  const recs = getRecipientsForGiver(me.event_id, me.id).map(r => r.name);
+  if (!recs.length) return res.status(400).json({ error: "You haven’t drawn yet." });
+
+  try {
+    await sendAssignmentEmail({
+      to: me.email,
+      participantName: me.name,
+      recipients: recs,
+      eventName: me.event_name,
+    });
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: "Failed to send email" });
+  }
+});
+
 
 const indexFile = path.join(__dirname, "public", "index.html");
 

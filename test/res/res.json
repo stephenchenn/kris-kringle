@@ -1,59 +1,49 @@
 {
-  "event": {
-    "id": "4df7a990-020b-4311-84d0-5ba1c6f13cdf",
-    "name": "Team KK 2025",
-    "gifts_per_person": 2
-  },
-  "invites": [
-    {
-      "name": "Alice",
-      "email": "alice@example.com",
-      "link": "http://localhost:3000/draw?token=5ad9c879-866f-4b42-a260-f314d572f6be"
+    "event": {
+        "id": "daf44b64-464d-44b0-b529-99d790a859d5",
+        "name": "Wong's Kris Kringle 202                                                  5",
+        "gifts_per_person": 2
     },
-    {
-      "name": "Bob",
-      "email": "bob@example.com",
-      "link": "http://localhost:3000/draw?token=eb54e762-7999-4866-b6e2-8526b2b8e204"
-    },
-    {
-      "name": "Carol",
-      "email": "carol@example.com",
-      "link": "http://localhost:3000/draw?token=b4db5515-2e1c-4a70-b0df-7cf1450b241e"
-    },
-    {
-      "name": "Dave",
-      "email": "dave@example.com",
-      "link": "http://localhost:3000/draw?token=53b7848c-a3d7-4dad-93e6-240861291077"
-    },
-    {
-      "name": "Eve",
-      "email": "eve@example.com",
-      "link": "http://localhost:3000/draw?token=3cf4439e-8579-43d0-b4b2-da5b55f963c1"
-    },
-    {
-      "name": "Frank",
-      "email": "frank@example.com",
-      "link": "http://localhost:3000/draw?token=0cf2359c-ed9f-447e-9024-332673df0c4f"
-    },
-    {
-      "name": "Grace",
-      "email": "grace@example.com",
-      "link": "http://localhost:3000/draw?token=426c9157-5782-49f3-8753-d9ffea5a13c2"
-    },
-    {
-      "name": "Heidi",
-      "email": "heidi@example.com",
-      "link": "http://localhost:3000/draw?token=9f0da26e-c5e8-4e9f-8d0a-addd0f08bbea"
-    },
-    {
-      "name": "Ivan",
-      "email": "ivan@example.com",
-      "link": "http://localhost:3000/draw?token=11cbbc41-3a51-4291-939a-e1f26b6f1de2"
-    },
-    {
-      "name": "Judy",
-      "email": "judy@example.com",
-      "link": "http://localhost:3000/draw?token=7dc397b5-03c8-4053-8e66-b58878950e2b"
-    }
-  ]
+    "invites": [
+        {
+            "name": "Stephen",
+            "email": "chen.stephen151@gmail.                                                  com",
+            "link": "http://localhost:3000/draw?token=3486ba49-f4f9-4794-bdcf-e6707817582d"
+        },
+        {
+            "name": "Stephen2",
+            "email": "chen.stephen141@gmail.com",
+            "link": "http://localhost:3000/                                                  draw?token=9967e3e4-cecb-4f56-878b-024443f7f61f"
+        },
+        {
+            "name": "Clarisse",
+            "email": "clariss                                                  e@example.com",
+            "link": "http://localhost:3000/draw?token=e684a652-1f35-40c1-a3d2-a00ae                                                  73bda02"
+        },
+        {
+            "name": "Liezel",
+            "email": "liezel@example.com",
+            "link": "http://localhost:3000                                       /draw?token=718fbb6d-f6e3-44b9-a1a7-688718f72b4f"
+        },
+        {
+            "name": "Pualine",
+            "email": "pualine                       @example.com",
+            "link": "http://localhost:3000/draw?token=a74e46b4-1dc7-4cb1-baa1-af1ced       fc498d"
+        },
+        {
+            "name": "Hana",
+            "email": "hana@example.com",
+            "link": "http://localhost:3000/draw                                                  ?token=9720e029-ac41-4e12-a00f-1ac95f95ea29"
+        },
+        {
+            "name": "Kelvin",
+            "email": "kelvin@exampl                                                  e.com",
+            "link": "http://localhost:3000/draw?token=204515ef-1b3c-4e6b-a411-eada928d1b53"
+        },
+        {
+            "name": "Andrew",
+            "email": "andrew@example.com",
+            "link": "http://localhost:3000/draw?to                                                  ken=12846bd4-9231-48a8-bf05-cd734cdbdf75"
+        }
+    ]
 }

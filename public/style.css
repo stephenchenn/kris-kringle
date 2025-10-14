@@ -64,3 +64,11 @@ ul {
 .muted {
     color: var(--muted);
 }
+
+button.secondary {
+    background: #4a5568;
+}
+
+button.secondary[disabled] {
+    background: #a0aec0;
+}
