@@ -1,6 +1,9 @@
 Start Dev Server (http://localhost:3000):
 npm run dev
 
+Generate Admin Secret:
+openssl rand -base64 32 | tr '+/' '-_' | tr -d '='
+
 1. Seed:
 curl -X POST http://localhost:3000/api/admin/seed \
   -H "Content-Type: application/json" \

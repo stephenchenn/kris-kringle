@@ -357,6 +357,10 @@ app.post("/api/resend", async (req, res) => {
   }
 });
 
+// lightweight liveness check
+app.get("/healthz", (req, res) => {
+  res.type("text/plain").send("ok"); // status 200 by default
+});
 
 const indexFile = path.join(__dirname, "public", "index.html");
 
