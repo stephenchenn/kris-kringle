@@ -4,23 +4,20 @@ curl -X POST http://localhost:3000/api/admin/seed \
   -d @- <<'JSON'
 {
   "secret": "change-this-long-random-string",
-  "eventName": "wong's christmas 2025",
+  "eventName": "Wong's Kris Kringle 2025",
   "giftsPerPerson": 2,
   "participants": [
-    {"name":"stephen1","email":"chen.stephen151@gmail.com"},
-    {"name":"stephen2","email":"chen.stephen141@gmail.com"},
-    {"name":"Alice","email":"alice@example.com"},
-    {"name":"Bob","email":"bob@example.com"},
-    {"name":"Carol","email":"carol@example.com"},
-    {"name":"Dave","email":"dave@example.com"},
-    {"name":"Eve","email":"eve@example.com"},
-    {"name":"Frank","email":"frank@example.com"},
-    {"name":"Grace","email":"grace@example.com"},
-    {"name":"Heidi","email":"heidi@example.com"}
+    {"name":"Stephen","email":"chen.stephen151@gmail.com"},
+    {"name":"Stephen2","email":"chen.stephen141@gmail.com"},
+    {"name":"Clarisse","email":"clarisse@example.com"},
+    {"name":"Liezel","email":"liezel@example.com"},
+    {"name":"Pualine","email":"pualine@example.com"},
+    {"name":"Hana","email":"hana@example.com"},
+    {"name":"Kelvin","email":"kelvin@example.com"},
+    {"name":"Andrew","email":"andrew@example.com"}
   ]
 }
 JSON
-
 
 1. Do the draw
 curl -X POST http://localhost:3000/api/draw \

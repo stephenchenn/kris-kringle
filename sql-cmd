@@ -1,0 +1,52 @@
+sqlite3 db.sqlite
+
+.headers on
+.mode box             -- nicer tables; or try .mode column
+.tables               -- list tables
+.schema events        -- show table DDL
+.schema participants
+.schema assignments
+
+-- See data
+SELECT * FROM events;
+SELECT id,name,email,has_drawn FROM participants LIMIT 20;
+SELECT giver_id, recipient_id FROM assignments LIMIT 20;
+
+-- Join to see names
+SELECT g.name AS giver, r.name AS recipient
+FROM assignments a
+JOIN participants g ON g.id = a.giver_id
+JOIN participants r ON r.id = a.recipient_id
+ORDER BY giver, recipient;
+
+-- How many gifts each person has received (balance check)
+SELECT r.name, COUNT(*) AS received
+FROM assignments a
+JOIN participants r ON r.id = a.recipient_id
+GROUP BY r.id
+ORDER BY received DESC, r.name;
+
+-- How many gifts each person is giving (should match gifts_per_person)
+SELECT g.name, COUNT(*) AS giving
+FROM assignments a
+JOIN participants g ON g.id = a.giver_id
+GROUP BY g.id
+ORDER BY giving DESC, g.name;
+
+.quit
+___________________________________________________________________________________________________________________________________________________________________________________
+
+Here’s what each file is:
+
+db.sqlite — the main SQLite database file.
+Stores all tables, indexes, and data pages.
+
+db.sqlite-wal — the Write-Ahead Log (WAL).
+When WAL mode is on (you enabled it with PRAGMA journal_mode=WAL), new writes are appended here first. Periodically they’re merged (“checkpointed”) back into db.sqlite.
+
+db.sqlite-shm — the shared-memory index for WAL.
+SQLite uses it to coordinate readers/writers and to find frames in the -wal file.
+___________________________________________________________________________________________________________________________________________________________________________________
+
+Clear
+rm -f db.sqlite db.sqlite-shm db.sqlite-wal
