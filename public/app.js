@@ -70,7 +70,7 @@
         errorEl.textContent = d.error || "Draw failed";
       } else {
         // ✅ Fire confetti once on success
-        if (window.triggerConfetti) window.triggerConfetti(0); // try other theme indexes if you like
+        if (window.triggerConfetti) window.triggerConfetti(0, 5000); // 5s
       }
       await loadMe();
     } catch (e) {

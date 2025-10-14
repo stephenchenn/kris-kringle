@@ -127,21 +127,30 @@
     };
   }
 
-  function startConfetti(themeIndex){
+  function startConfetti(themeIndex, durationMs) {
     if (frame) return; // already running
     var theme = colorThemes[themeIndex || 0];
     var cont = ensureContainer();
     document.body.appendChild(cont);
 
+    var endAt = performance.now() + (typeof durationMs === 'number' ? durationMs : 5000);
+
+    // add pieces periodically until endAt
     (function addConfetto(){
+      var now = performance.now();
+      if (now >= endAt) {
+        // stop adding new confetti
+        timer = undefined;
+        return;
+      }
       var confetto = new Confetto(theme);
       confetti.push(confetto);
       cont.appendChild(confetto.outer);
-      timer = setTimeout(addConfetto, spread * random());
+      timer = setTimeout(addConfetto, spread * Math.random());
     })();
 
     var prev;
-    requestAnimationFrame(function loop(ts){
+    function loop(ts){
       var delta = prev ? ts - prev : 0; prev = ts;
       var height = window.innerHeight;
 
@@ -151,6 +160,8 @@
           confetti.splice(i, 1);
         }
       }
+
+      // if we still have a timer or confetti on screen, keep animating
       if (timer || confetti.length) {
         frame = requestAnimationFrame(loop);
       } else {
@@ -158,10 +169,23 @@
         if (cont.parentNode) cont.parentNode.removeChild(cont);
         frame = undefined;
       }
-    });
+    }
+    frame = requestAnimationFrame(loop);
+  }
+
+  function hardStopConfetti(){
+    // Immediately stop adding and remove everything
+    if (timer) { clearTimeout(timer); timer = undefined; }
+    if (frame) { cancelAnimationFrame(frame); frame = undefined; }
+    if (container && container.parentNode) {
+      // remove remaining confetti nodes
+      try { while (container.firstChild) container.removeChild(container.firstChild); } catch {}
+      container.parentNode.removeChild(container);
+    }
+    confetti.length = 0;
   }
 
   // Expose a global function you can call from app.js
   window.triggerConfetti = function(themeIndex){ startConfetti(themeIndex); };
-
+  window.stopConfetti = function(){ hardStopConfetti(); };
 })();

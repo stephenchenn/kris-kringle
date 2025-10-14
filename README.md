@@ -40,6 +40,6 @@ curl "http://localhost:3000/api/me?token=<paste-one-token>"
 To Do:
 1. Resend func ✅
 2. Send invites api ✅
-3. Confetti
+3. Confetti ✅
 4. Deploy
 5. Test
