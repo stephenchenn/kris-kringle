@@ -45,7 +45,7 @@ curl -X POST https://kris-kringle.onrender.com/api/admin/seed \
   -H "Content-Type: application/json" \
   -d @- <<'JSON'
 {
-  "secret": "<ADMIN_SECRET>",
+  "secret": "Vy_VnmjzDmBtxTOkBh7tIeBOyUt8kS0j4reLF7rWVZ0",
   "eventName": "Wong's Kris Kringle 2025",
   "giftsPerPerson": 2,
   "participants": [
@@ -64,7 +64,7 @@ JSON
 2. Send Invites:
 curl -X POST https://kris-kringle.onrender.com/api/admin/send-invites \
   -H "Content-Type: application/json" \
-  -d '{"secret":"<ADMIN_SECRET>","eventId":"<optional-event-id>"}'
+  -d '{"secret":"Vy_VnmjzDmBtxTOkBh7tIeBOyUt8kS0j4reLF7rWVZ0","eventId":"dd264c2b-a972-4beb-afb3-ef8b6c8bbff9"}'
 
 ______________________________________________________________________________________________________________________________________________________________________________
 

@@ -152,13 +152,17 @@ app.get("/api/me", (req, res) => {
 
 // Count how many gifts each recipient already has in this event
 function recipientCounts(event_id) {
-  const rows = db.prepare(`
+  const rows = db
+    .prepare(
+      `
     SELECT recipient_id AS id, COUNT(*) AS c
     FROM assignments
     WHERE event_id = ?
     GROUP BY recipient_id
-  `).all(event_id);
-  const map = new Map(rows.map(r => [r.id, Number(r.c)]));
+  `
+    )
+    .all(event_id);
+  const map = new Map(rows.map((r) => [r.id, Number(r.c)]));
   return map;
 }
 
@@ -194,8 +198,8 @@ app.post("/api/draw", async (req, res) => {
   for (const c of sorted) {
     if (chosen.length >= need) break;
     const rc = counts.get(c.id) || 0;
-    if (rc >= giftsPerPerson) continue;        // hit the cap, skip
-    if (alreadyIds.has(c.id)) continue;        // giver already has this recipient
+    if (rc >= giftsPerPerson) continue; // hit the cap, skip
+    if (alreadyIds.has(c.id)) continue; // giver already has this recipient
 
     try {
       db.prepare(
@@ -296,21 +300,32 @@ app.post("/api/admin/seed", (req, res) => {
 
 app.post("/api/admin/send-invites", async (req, res) => {
   const { secret, eventId } = req.body || {};
-  if (secret !== process.env.ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+  if (secret !== process.env.ADMIN_SECRET)
+    return res.status(403).json({ error: "Forbidden" });
 
   // pick event: use provided ID or the most recent
-  const evt = eventId ||
-    db.prepare(`SELECT id, name FROM events ORDER BY created_at DESC LIMIT 1`).get()?.id;
+  const evt =
+    eventId ||
+    db
+      .prepare(`SELECT id, name FROM events ORDER BY created_at DESC LIMIT 1`)
+      .get()?.id;
   if (!evt) return res.status(404).json({ error: "No event found" });
 
-  const eventRow = db.prepare(`SELECT id, name, gifts_per_person FROM events WHERE id = ?`).get(evt);
+  const eventRow = db
+    .prepare(`SELECT id, name, gifts_per_person FROM events WHERE id = ?`)
+    .get(evt);
   const base = process.env.BASE_URL || "http://localhost:3000";
-  const people = db.prepare(`SELECT name, email, invite_token FROM participants WHERE event_id = ?`).all(evt);
+  const people = db
+    .prepare(
+      `SELECT name, email, invite_token FROM participants WHERE event_id = ?`
+    )
+    .all(evt);
 
   const send = (to, subject, html) =>
     transporter.sendMail({ from: process.env.FROM_EMAIL, to, subject, html });
 
-  let sent = 0, failed = [];
+  let sent = 0,
+    failed = [];
   for (const p of people) {
     const link = `${base}/draw?token=${p.invite_token}`;
     const html = `
@@ -341,8 +356,9 @@ app.post("/api/resend", async (req, res) => {
   const me = getParticipantByToken(token);
   if (!me) return res.status(404).json({ error: "Invalid token" });
 
-  const recs = getRecipientsForGiver(me.event_id, me.id).map(r => r.name);
-  if (!recs.length) return res.status(400).json({ error: "You haven’t drawn yet." });
+  const recs = getRecipientsForGiver(me.event_id, me.id).map((r) => r.name);
+  if (!recs.length)
+    return res.status(400).json({ error: "You haven’t drawn yet." });
 
   try {
     await sendAssignmentEmail({
@@ -360,6 +376,24 @@ app.post("/api/resend", async (req, res) => {
 // lightweight liveness check
 app.get("/healthz", (req, res) => {
   res.type("text/plain").send("ok"); // status 200 by default
+});
+
+app.post("/api/admin/reset", (req, res) => {
+  const { secret } = req.body || {};
+  if (secret !== process.env.ADMIN_SECRET)
+    return res.status(403).json({ error: "Forbidden" });
+  try {
+    db.exec(`
+		PRAGMA foreign_keys=ON;
+		DELETE FROM assignments;
+		DELETE FROM participants;
+		DELETE FROM events;
+		VACUUM;
+	  `);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 const indexFile = path.join(__dirname, "public", "index.html");
