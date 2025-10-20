@@ -32,10 +32,10 @@ ________________________________________________________________________________
 3. Each Recipients do the draw:
 curl -X POST http://localhost:3000/api/draw \
   -H "Content-Type: application/json" \
-  -d '{"token":"<paste-one-token>"}'
+  -d '{"token":"<recipient-token>"}'
 
 4. Check your identity + current recipients
-curl "http://localhost:3000/api/me?token=<paste-one-token>"
+curl "http://localhost:3000/api/me?token=<recipient-token>"
 ______________________________________________________________________________________________________________________________________________________________________________
 
 PROD:
@@ -45,7 +45,7 @@ curl -X POST https://kris-kringle.onrender.com/api/admin/seed \
   -H "Content-Type: application/json" \
   -d @- <<'JSON'
 {
-  "secret": "Vy_VnmjzDmBtxTOkBh7tIeBOyUt8kS0j4reLF7rWVZ0",
+  "secret": "<ADMIN_SECRET>",
   "eventName": "Wong's Kris Kringle 2025",
   "giftsPerPerson": 2,
   "participants": [
@@ -64,7 +64,7 @@ JSON
 2. Send Invites:
 curl -X POST https://kris-kringle.onrender.com/api/admin/send-invites \
   -H "Content-Type: application/json" \
-  -d '{"secret":"Vy_VnmjzDmBtxTOkBh7tIeBOyUt8kS0j4reLF7rWVZ0","eventId":"dd264c2b-a972-4beb-afb3-ef8b6c8bbff9"}'
+  -d '{"secret":"<ADMIN_SECRET>","eventId":"<EVENT_ID>"}'
 
 ______________________________________________________________________________________________________________________________________________________________________________
 

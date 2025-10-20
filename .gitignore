@@ -1,3 +1,4 @@
 node_modules
 .env
 api-keys
+res.json
