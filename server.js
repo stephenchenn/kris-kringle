@@ -129,26 +129,66 @@ function shuffle(arr) {
   return a;
 }
 
-async function sendAssignmentEmail({
-  to,
-  participantName,
-  recipients,
-  eventName,
-}) {
+/**
+ * Send assignment email showing recipients grouped by tier (with budgets).
+ *
+ * @param {Object} opts
+ * @param {string} opts.to                - recipient email address
+ * @param {string} opts.participantName   - recipient display name
+ * @param {string} opts.eventName         - event name
+ * @param {Array}  opts.recipients_by_tier - [{ name, budget_cents, recipient }]
+ * @param {string} [opts.replyTo]         - optional reply-to header
+ */
+async function sendAssignmentEmail({ to, participantName, eventName, recipients_by_tier, replyTo }) {
+  // Small helper to format cents -> "$100"
+  const fmt = (cents) => {
+    if (typeof cents !== "number") return "";
+    // show as integer dollars (no decimals) per your example
+    return `$${(cents / 100).toFixed(0)}`;
+  };
+
+  // Build list items. Guard in case some recipient is still null.
+  const items = (Array.isArray(recipients_by_tier) ? recipients_by_tier : [])
+    .map(t => {
+      const r = t.recipient ? t.recipient : "—";
+      const budget = (typeof t.budget_cents === "number" && t.budget_cents > 0) ? ` (${fmt(t.budget_cents)})` : "";
+      return `<li style="margin:6px 0;"><b>${escapeHtml(t.name)}</b>${budget}: ${escapeHtml(r)}</li>`;
+    })
+    .join("");
+
   const html = `
-    <div style="font-family:Arial,Helvetica,sans-serif;font-size:16px;color:#111111 !important;">
-      <p>Hi ${participantName},</p>
-      <p>Your Kris Kringle recipients for <b>${eventName}</b> are:</p>
-      <ul>${recipients.map((r) => `<li>${r}</li>`).join("")}</ul>
+    <div style="font-family:Arial,Helvetica,sans-serif;font-size:16px;color:#111111;">
+      <p>Hi ${escapeHtml(participantName)},</p>
+      <p>Your Kris Kringle recipients for <b>${escapeHtml(eventName)}</b> are:</p>
+      <ul style="margin:0 0 16px 20px;padding:0;">${items}</ul>
       <p>Happy gifting! 🎁</p>
-    </div>`;
-  await transporter.sendMail({
+    </div>
+  `;
+
+  // Compose mail options
+  const mailOptions = {
     from: process.env.FROM_EMAIL,
     to,
     subject: `Your Kris Kringle recipients for ${eventName}`,
     html,
-  });
+  };
+  if (replyTo) mailOptions.replyTo = replyTo;
+
+  // Send; let errors bubble to caller to handle/log
+  await transporter.sendMail(mailOptions);
 }
+
+// tiny helper to escape user-provided text for HTML (very small)
+function escapeHtml(s) {
+  if (s == null) return "";
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 
 // --- API: who am I + recipients ---
 // GET /api/me
@@ -270,28 +310,16 @@ app.post("/api/draw", async (req, res) => {
       // continue — we can still return recipients
     }
 
-    // send email (fire-and-forget but catch errors)
-    (async () => {
-      try {
-        const fmt = (cents) => `$${(cents/100).toFixed(0)}`;
-        const items = recipients_by_tier.map(t => `<li><b>${t.name}</b> (${fmt(t.budget_cents)}): ${t.recipient}</li>`).join("");
-        const html = `
-          <div style="font-family:Arial,Helvetica,sans-serif;font-size:16px;color:#111;padding:24px;">
-            <p>Hi ${meRow.name},</p>
-            <p>Your Kris Kringle recipients for <b>${meRow.event_name}</b>:</p>
-            <ul style="margin:0 0 16px 20px;padding:0;">${items}</ul>
-            <p style="color:#6b7280;font-size:14px;margin:16px 0 0 0;">Happy gifting! 🎁</p>
-          </div>`;
-        await transporter.sendMail({
-          from: process.env.FROM_EMAIL,
-          to: meRow.email,
-          subject: `Your recipients for ${meRow.event_name}`,
-          html,
-        });
-      } catch (e) {
-        console.error("Email error:", e && e.message ? e.message : e);
-      }
-    })();
+  // send email using centralized helper (fire-and-forget)
+  sendAssignmentEmail({
+    to: meRow.email,
+    participantName: meRow.name,
+    eventName: meRow.event_name,
+    recipients_by_tier,
+    // replyTo: "Your Name <you@yourdomain.com>", // optional
+  })
+    .catch((e) => console.error("Email error:", e && e.message ? e.message : e));
+
   }
 
   // Return the recipients now so the client can immediately show them
@@ -494,22 +522,47 @@ app.post("/api/resend", async (req, res) => {
   const me = getParticipantByToken(token);
   if (!me) return res.status(404).json({ error: "Invalid token" });
 
-  const recs = getRecipientsForGiver(me.event_id, me.id).map((r) => r.name);
-  if (!recs.length)
-    return res.status(400).json({ error: "You haven’t drawn yet." });
+  // fetch tiers
+  const tiers = db.prepare(`
+    SELECT id, name, budget_cents, sort_order
+    FROM gift_tiers
+    WHERE event_id = ?
+    ORDER BY sort_order
+  `).all(me.event_id);
+
+  // fetch assigned recipients for this giver (tier-aware)
+  const rows = db.prepare(`
+    SELECT a.tier_id, r.name AS recipient_name
+    FROM assignments a
+    JOIN participants r ON r.id = a.recipient_id
+    WHERE a.event_id = ? AND a.giver_id = ?
+  `).all(me.event_id, me.id);
+
+  const recipients_by_tier = tiers.map(t => ({
+    tier_id: t.id,
+    name: t.name,
+    budget_cents: t.budget_cents,
+    recipient: (rows.find(r => r.tier_id === t.id) || {}).recipient_name || null,
+  }));
+
+  // If there are no recipients yet (not drawn), bail
+  const any = recipients_by_tier.some(t => !!t.recipient);
+  if (!any) return res.status(400).json({ error: "You haven’t drawn yet." });
 
   try {
     await sendAssignmentEmail({
       to: me.email,
       participantName: me.name,
-      recipients: recs,
       eventName: me.event_name,
+      recipients_by_tier,
     });
     res.json({ ok: true });
   } catch (e) {
+    console.error("Resend email error:", e && e.message ? e.message : e);
     res.status(500).json({ error: "Failed to send email" });
   }
 });
+
 
 // lightweight liveness check
 app.get("/healthz", (req, res) => {

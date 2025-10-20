@@ -1,7 +1,7 @@
 sqlite3 db.sqlite
 
 .headers on
-.mode box             -- nicer tables; or try .mode column
+.mode box
 .tables
 .schema events
 .schema participants

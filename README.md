@@ -3,7 +3,7 @@ LOCAL:
 npm run dev
 
 1. Seed:
-curl -X POST https://<your-host>/api/admin/seed \
+curl -X POST http://localhost:3000/api/admin/seed \
   -H "Content-Type: application/json" \
   -d @- <<'JSON'
 {
