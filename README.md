@@ -98,11 +98,7 @@ Note: it checks for:
   1) For each tier, every participant gives exactly one gift and receives exactly one gift.
   2) No self-assignments.
   3) Cross-tier uniqueness: a giver never gifts to the same recipient more than once.
-  4) Throws if constraints are impossible (e.g., tiers > participants - 1).
-
-  Max tier count is (number of participants - 1) since we don't want anyone to gift to the same person more than once
-
-
+  4) Max tier count is (number of participants - 1)
 
 SSH
 # Set up
