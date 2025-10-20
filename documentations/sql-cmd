@@ -2,6 +2,7 @@ sqlite3 db.sqlite
 
 .headers on
 .mode box
+
 .tables
 .schema events
 .schema participants

@@ -12,14 +12,7 @@ curl -X POST http://localhost:3000/api/admin/seed \
   "participants": [
     {"name":"stephen1","email":"chen.stephen151@gmail.com"},
     {"name":"stephen2","email":"chen.stephen141@gmail.com"},
-    {"name":"Alice","email":"alice@example.com"},
-    {"name":"Bob","email":"bob@example.com"},
-    {"name":"Carol","email":"carol@example.com"},
-    {"name":"Dave","email":"dave@example.com"},
-    {"name":"Eve","email":"eve@example.com"},
-    {"name":"Frank","email":"frank@example.com"},
-    {"name":"Grace","email":"grace@example.com"},
-    {"name":"Heidi","email":"heidi@example.com"}
+    {"name":"Alice","email":"alice@example.com"}
   ],
   "tiers": [
     { "name": "Gift 1", "budgetCents": 10000 },
@@ -31,7 +24,7 @@ JSON
 2. Send invites to participants:
 curl -X POST http://localhost:3000/api/admin/send-invites \
   -H "Content-Type: application/json" \
-  -d '{"secret":"<ADMIN_SECRET>","eventId":"<optional-event-id>"}'
+  -d '{"secret":"<ADMIN_SECRET>","eventId":""}'
 ______________________________________________________________________________________________________________________________________________________________________________
 
 3. Each Recipients do the draw:
@@ -51,17 +44,15 @@ curl -X POST https://kris-kringle.onrender.com/api/admin/seed \
   -d @- <<'JSON'
 {
   "secret": "<ADMIN_SECRET>",
-  "eventName": "Wong's Kris Kringle 2025",
-  "giftsPerPerson": 2,
+  "eventName": "Wong's Christmas 2027",
   "participants": [
-    {"name":"Stephen","email":"chen.stephen151@gmail.com"},
-    {"name":"Stephen2","email":"chen.stephen141@gmail.com"},
-    {"name":"Clarisse","email":"clarisse@example.com"},
-    {"name":"Liezel","email":"liezel@example.com"},
-    {"name":"Pualine","email":"pualine@example.com"},
-    {"name":"Hana","email":"hana@example.com"},
-    {"name":"Kelvin","email":"kelvin@example.com"},
-    {"name":"Andrew","email":"andrew@example.com"}
+    {"name":"stephen1","email":"chen.stephen151@gmail.com"},
+    {"name":"stephen2","email":"chen.stephen141@gmail.com"},
+    {"name":"Alice","email":"alice@example.com"}
+  ],
+  "tiers": [
+    { "name": "Gift 1", "budgetCents": 10000 },
+    { "name": "Gift 2", "budgetCents":  5000 }
   ]
 }
 JSON
@@ -69,12 +60,12 @@ JSON
 2. Send Invites:
 curl -X POST https://kris-kringle.onrender.com/api/admin/send-invites \
   -H "Content-Type: application/json" \
-  -d '{"secret":"<ADMIN_SECRET>","eventId":"<EVENT_ID>"}'
+  -d '{"secret":"<ADMIN_SECRET>","eventId":"a1679b20-48b6-466b-a50a-2f4fa317b736"}'
 
 
 
 RESET:
-curl -X POST https://<your-host>/api/admin/reset \
+curl -X POST https://kris-kringle.onrender.com/api/admin/reset \
   -H "Content-Type: application/json" \
   -d '{"secret":"<ADMIN_SECRET>"}'
 
@@ -85,8 +76,8 @@ To Do:
 2. Send invites api ✅
 3. Confetti ✅
 4. Deploy ✅
-5. Test
-6. Add budget to gifts and ensure each person gives and receives a gift of each budget (e.g. 2 gifts, one budget $50 and one budget $100)
+5. Test ✅
+6. Add budget to gifts and ensure each person gives and receives a gift of each budget (e.g. 2 gifts, one budget $50 and one budget $100) ✅
 
 Future Actions
 - Godaddy domain wongskringle.online expires on 15 Oct, 2026 (Auto-renew turned off)
@@ -110,3 +101,18 @@ Note: it checks for:
   4) Throws if constraints are impossible (e.g., tiers > participants - 1).
 
   Max tier count is (number of participants - 1) since we don't want anyone to gift to the same person more than once
+
+
+
+SSH
+# Set up
+https://render.com/docs/ssh
+
+# Enter SSH
+render ssh
+
+# backup first (if you haven’t already)
+sqlite3 /data/db.sqlite ".backup '/tmp/kk-backup.sqlite'"
+
+# open the snapshot
+sqlite3 /tmp/kk-backup.sqlite
