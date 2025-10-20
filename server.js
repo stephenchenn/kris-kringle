@@ -16,6 +16,7 @@ db.pragma("journal_mode = WAL");
 
 // --- DB schema (idempotent) ---
 db.exec(`
+-- events: one Secret Santa group
 CREATE TABLE IF NOT EXISTS events (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
@@ -23,6 +24,7 @@ CREATE TABLE IF NOT EXISTS events (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- participants: each person in an event
 CREATE TABLE IF NOT EXISTS participants (
   id TEXT PRIMARY KEY,
   event_id TEXT NOT NULL,
@@ -35,22 +37,45 @@ CREATE TABLE IF NOT EXISTS participants (
   FOREIGN KEY(event_id) REFERENCES events(id) ON DELETE CASCADE
 );
 
-CREATE TABLE IF NOT EXISTS assignments (
+-- gift_tiers: budgets / tiers for an event (e.g. Gift 1 $100, Gift 2 $50)
+CREATE TABLE IF NOT EXISTS gift_tiers (
   id TEXT PRIMARY KEY,
   event_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  budget_cents INTEGER NOT NULL DEFAULT 0,
+  sort_order INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(event_id, sort_order),
+  FOREIGN KEY(event_id) REFERENCES events(id) ON DELETE CASCADE
+);
+
+-- assignments: who gives which recipient for which tier
+-- constraints:
+--  - one assignment per giver per tier (giver gives exactly one per tier)
+--  - one assignment per recipient per tier (recipient receives exactly one per tier)
+DROP TABLE IF EXISTS assignments;
+CREATE TABLE assignments (
+  id TEXT PRIMARY KEY,
+  event_id TEXT NOT NULL,
+  tier_id TEXT NOT NULL,
   giver_id TEXT NOT NULL,
   recipient_id TEXT NOT NULL,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   CHECK (giver_id <> recipient_id),
-  UNIQUE(event_id, giver_id, recipient_id),
   FOREIGN KEY(event_id) REFERENCES events(id) ON DELETE CASCADE,
+  FOREIGN KEY(tier_id) REFERENCES gift_tiers(id) ON DELETE CASCADE,
   FOREIGN KEY(giver_id) REFERENCES participants(id) ON DELETE CASCADE,
-  FOREIGN KEY(recipient_id) REFERENCES participants(id) ON DELETE CASCADE
+  FOREIGN KEY(recipient_id) REFERENCES participants(id) ON DELETE CASCADE,
+  UNIQUE(event_id, tier_id, giver_id),
+  UNIQUE(event_id, tier_id, recipient_id),
+  UNIQUE(event_id, tier_id, giver_id, recipient_id)
 );
 
+-- helpful indexes
 CREATE INDEX IF NOT EXISTS idx_participants_event ON participants(event_id);
-CREATE INDEX IF NOT EXISTS idx_assignments_giver ON assignments(event_id, giver_id);
-CREATE INDEX IF NOT EXISTS idx_assignments_recipient ON assignments(event_id, recipient_id);
+CREATE INDEX IF NOT EXISTS idx_tiers_event ON gift_tiers(event_id, sort_order);
+CREATE INDEX IF NOT EXISTS idx_assignments_ev_tier_giver ON assignments(event_id, tier_id, giver_id);
+CREATE INDEX IF NOT EXISTS idx_assignments_ev_tier_recipient ON assignments(event_id, tier_id, recipient_id);
 `);
 
 // --- Email transport ---
@@ -126,29 +151,62 @@ async function sendAssignmentEmail({
 }
 
 // --- API: who am I + recipients ---
+// GET /api/me
 app.get("/api/me", (req, res) => {
   const token = req.query.token;
   if (!token) return res.status(400).json({ error: "Missing token" });
 
-  const me = getParticipantByToken(token);
-  if (!me) return res.status(404).json({ error: "Invalid token" });
+  // who am I + event
+  const meRow = db.prepare(`
+    SELECT p.id, p.name, p.email, p.has_drawn, p.event_id,
+           e.name AS event_name
+    FROM participants p
+    JOIN events e ON e.id = p.event_id
+    WHERE p.invite_token = ?
+  `).get(token);
 
-  const recs = getRecipientsForGiver(me.event_id, me.id);
-  res.json({
-    me: {
-      id: me.id,
-      name: me.name,
-      email: me.email,
-      has_drawn: Boolean(me.has_drawn),
-    },
-    event: {
-      id: me.event_id,
-      name: me.event_name,
-      gifts_per_person: me.gifts_per_person,
-    },
-    recipients: recs.map((r) => r.name),
+  if (!meRow) return res.status(404).json({ error: "Invalid token" });
+
+  // list tiers
+  const tiers = db.prepare(`
+    SELECT id, name, budget_cents, sort_order
+    FROM gift_tiers
+    WHERE event_id = ?
+    ORDER BY sort_order
+  `).all(meRow.event_id);
+
+  let recipients_by_tier = tiers.map(t => ({
+    tier_id: t.id,
+    name: t.name,
+    budget_cents: t.budget_cents,
+    recipient: null, // default hidden
+  }));
+
+  // Only fetch assigned recipients if user has_drawn
+  if (meRow.has_drawn) {
+    const rows = db.prepare(`
+      SELECT a.tier_id, r.name AS recipient_name
+      FROM assignments a
+      JOIN participants r ON r.id = a.recipient_id
+      WHERE a.event_id = ? AND a.giver_id = ?
+    `).all(meRow.event_id, meRow.id);
+
+    recipients_by_tier = tiers.map(t => ({
+      tier_id: t.id,
+      name: t.name,
+      budget_cents: t.budget_cents,
+      recipient: (rows.find(r => r.tier_id === t.id) || {}).recipient_name || null,
+    }));
+  }
+
+  return res.json({
+    me: { id: meRow.id, name: meRow.name, email: meRow.email, has_drawn: Boolean(meRow.has_drawn) },
+    event: { id: meRow.event_id, name: meRow.event_name, tiers: tiers.map(t => ({ id: t.id, name: t.name, budget_cents: t.budget_cents })) },
+    recipients_by_tier,
   });
 });
+
+
 
 // Count how many gifts each recipient already has in this event
 function recipientCounts(event_id) {
@@ -166,134 +224,214 @@ function recipientCounts(event_id) {
   return map;
 }
 
+// POST /api/draw
 app.post("/api/draw", async (req, res) => {
   const { token } = req.body || {};
   if (!token) return res.status(400).json({ error: "Missing token" });
 
-  const me = getParticipantByToken(token);
-  if (!me) return res.status(404).json({ error: "Invalid token" });
+  const meRow = db.prepare(`
+    SELECT p.id, p.name, p.email, p.has_drawn, p.event_id,
+           e.name AS event_name
+    FROM participants p
+    JOIN events e ON e.id = p.event_id
+    WHERE p.invite_token = ?
+  `).get(token);
 
-  const giftsPerPerson = me.gifts_per_person;
-  const existing = getRecipientsForGiver(me.event_id, me.id);
-  if (existing.length >= giftsPerPerson) {
-    return res.json({ ok: true, recipients: existing.map((r) => r.name) });
-  }
+  if (!meRow) return res.status(404).json({ error: "Invalid token" });
 
-  const participants = listParticipants(me.event_id);
-  const candidates = participants.filter((p) => p.id !== me.id);
+  // fetch tiers
+  const tiers = db.prepare(`
+    SELECT id, name, budget_cents, sort_order
+    FROM gift_tiers WHERE event_id = ?
+    ORDER BY sort_order
+  `).all(meRow.event_id);
 
-  // ---- NEW: balance by current recipient load
-  const counts = recipientCounts(me.event_id);
-  // sort: least-assigned first, then random to break ties
-  const sorted = shuffle(candidates).sort((a, b) => {
-    const ca = counts.get(a.id) || 0;
-    const cb = counts.get(b.id) || 0;
-    return ca - cb;
-  });
+  // fetch assigned recipients (they exist because we preassigned at seed)
+  const rows = db.prepare(`
+    SELECT a.tier_id, r.name AS recipient_name
+    FROM assignments a
+    JOIN participants r ON r.id = a.recipient_id
+    WHERE a.event_id = ? AND a.giver_id = ?
+  `).all(meRow.event_id, meRow.id);
 
-  const alreadyIds = new Set(existing.map((x) => x.id));
-  const need = giftsPerPerson - existing.length;
-  const chosen = [];
+  const recipients_by_tier = tiers.map(t => ({
+    tier_id: t.id,
+    name: t.name,
+    budget_cents: t.budget_cents,
+    recipient: (rows.find(r => r.tier_id === t.id) || {}).recipient_name || null,
+  }));
 
-  for (const c of sorted) {
-    if (chosen.length >= need) break;
-    const rc = counts.get(c.id) || 0;
-    if (rc >= giftsPerPerson) continue; // hit the cap, skip
-    if (alreadyIds.has(c.id)) continue; // giver already has this recipient
-
+  // If they haven't drawn yet, mark as drawn and send email
+  if (!meRow.has_drawn) {
     try {
-      db.prepare(
-        `INSERT INTO assignments (id, event_id, giver_id, recipient_id) VALUES (?,?,?,?)`
-      ).run(randomUUID(), me.event_id, me.id, c.id);
-
-      counts.set(c.id, rc + 1); // update live so later picks stay balanced
-      chosen.push(c);
-    } catch {
-      // unique/race => skip
+      db.prepare(`UPDATE participants SET has_drawn = 1 WHERE id = ?`).run(meRow.id);
+    } catch (e) {
+      console.error("Failed to mark has_drawn:", e.message);
+      // continue — we can still return recipients
     }
-  }
-  // ---- END NEW
 
-  const after = getRecipientsForGiver(me.event_id, me.id);
-  if (after.length > 0 && !me.has_drawn) {
-    db.prepare(`UPDATE participants SET has_drawn = 1 WHERE id = ?`).run(me.id);
-  }
-
-  const names = after.map((r) => r.name);
-
-  try {
-    await sendAssignmentEmail({
-      to: me.email,
-      participantName: me.name,
-      recipients: names,
-      eventName: me.event_name,
-    });
-  } catch (e) {
-    console.error("Email error:", e.message);
-  }
-
-  if (after.length < giftsPerPerson) {
-    return res.status(400).json({
-      error: "Not enough unique recipients available right now.",
-      recipients: names,
-    });
+    // send email (fire-and-forget but catch errors)
+    (async () => {
+      try {
+        const fmt = (cents) => `$${(cents/100).toFixed(0)}`;
+        const items = recipients_by_tier.map(t => `<li><b>${t.name}</b> (${fmt(t.budget_cents)}): ${t.recipient}</li>`).join("");
+        const html = `
+          <div style="font-family:Arial,Helvetica,sans-serif;font-size:16px;color:#111;padding:24px;">
+            <p>Hi ${meRow.name},</p>
+            <p>Your Kris Kringle recipients for <b>${meRow.event_name}</b>:</p>
+            <ul style="margin:0 0 16px 20px;padding:0;">${items}</ul>
+            <p style="color:#6b7280;font-size:14px;margin:16px 0 0 0;">Happy gifting! 🎁</p>
+          </div>`;
+        await transporter.sendMail({
+          from: process.env.FROM_EMAIL,
+          to: meRow.email,
+          subject: `Your recipients for ${meRow.event_name}`,
+          html,
+        });
+      } catch (e) {
+        console.error("Email error:", e && e.message ? e.message : e);
+      }
+    })();
   }
 
-  res.json({ ok: true, recipients: names });
+  // Return the recipients now so the client can immediately show them
+  return res.json({ ok: true, recipients_by_tier });
 });
 
-// --- API: admin seed ---
-app.post("/api/admin/seed", (req, res) => {
-  const { secret, eventName, giftsPerPerson, participants } = req.body || {};
-  if (secret !== process.env.ADMIN_SECRET)
-    return res.status(403).json({ error: "Forbidden" });
 
-  if (!eventName || !Number.isInteger(giftsPerPerson) || giftsPerPerson <= 0) {
-    return res.status(400).json({ error: "Invalid event payload" });
+
+// --- API: admin seed ---
+// server.js (replace your /api/admin/seed endpoint)
+
+
+// Simple derangement: shuffle until no one maps to themselves.
+// For small N (~10) this is fast & fine.
+function derange(ids) {
+  const a = ids.slice();
+  for (let attempts = 0; attempts < 1000; attempts++) {
+    // Fisher-Yates
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    let ok = true;
+    for (let i = 0; i < a.length; i++) if (a[i] === ids[i]) { ok = false; break; }
+    if (ok) return a;
   }
-  if (!Array.isArray(participants) || participants.length < 2) {
-    return res.status(400).json({ error: "Need at least 2 participants" });
+  throw new Error("Failed to create derangement");
+}
+
+app.post("/api/admin/seed", (req, res) => {
+  const { secret, eventName, giftsPerPerson, participants, tiers } = req.body || {};
+  if (secret !== process.env.ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+
+  if (!eventName) return res.status(400).json({ error: "Missing eventName" });
+  const people = Array.isArray(participants) ? participants : [];
+  if (people.length < 2) return res.status(400).json({ error: "Need at least 2 participants" });
+
+  // tiers: if not provided, fall back to giftsPerPerson (uniform, no budgets)
+  let tierDefs = [];
+  if (Array.isArray(tiers) && tiers.length > 0) {
+    tierDefs = tiers.map((t, i) => ({
+      id: randomUUID(),
+      name: t.name || `Gift ${i + 1}`,
+      budget_cents: Number(t.budgetCents ?? 0) | 0,
+      sort_order: i + 1,
+    }));
+  } else if (Number.isInteger(giftsPerPerson) && giftsPerPerson > 0) {
+    tierDefs = Array.from({ length: giftsPerPerson }, (_, i) => ({
+      id: randomUUID(),
+      name: `Gift ${i + 1}`,
+      budget_cents: 0,
+      sort_order: i + 1,
+    }));
+  } else {
+    return res.status(400).json({ error: "Provide tiers[] or giftsPerPerson > 0" });
   }
 
   const eventId = randomUUID();
-  const insertEvent = db.prepare(
-    `INSERT INTO events (id, name, gifts_per_person) VALUES (?,?,?)`
-  );
+  const insertEvent = db.prepare(`INSERT INTO events (id, name, gifts_per_person) VALUES (?,?,?)`);
   const insertParticipant = db.prepare(`
     INSERT INTO participants (id, event_id, name, email, invite_token)
     VALUES (?,?,?,?,?)
   `);
+  const insertTier = db.prepare(`
+    INSERT INTO gift_tiers (id, event_id, name, budget_cents, sort_order)
+    VALUES (?,?,?,?,?)
+  `);
+  const insertAssignment = db.prepare(`
+    INSERT INTO assignments (id, event_id, tier_id, giver_id, recipient_id)
+    VALUES (?,?,?,?,?)
+  `);
 
   const tx = db.transaction(() => {
-    insertEvent.run(eventId, eventName, giftsPerPerson);
-    for (const p of participants) {
+    insertEvent.run(eventId, eventName, tierDefs.length);
+
+    // add participants
+    const pRows = [];
+    for (const p of people) {
       const pid = randomUUID();
       const token = randomUUID();
       insertParticipant.run(pid, eventId, p.name, p.email, token);
+      pRows.push({ id: pid, name: p.name, email: p.email, token });
     }
+
+    // add tiers
+    for (const t of tierDefs) {
+      insertTier.run(t.id, eventId, t.name, t.budget_cents, t.sort_order);
+    }
+
+    // PREASSIGN: build one derangement per tier
+    // Ensure a giver doesn't get the SAME recipient across different tiers
+    const giverIds = pRows.map((p) => p.id);
+    const alreadyForGiver = new Map(giverIds.map((g) => [g, new Set()]));
+
+    for (const t of tierDefs) {
+      let perm;
+      // Try derangements until they also avoid duplicates across tiers for a giver
+      attempt: for (let tries = 0; tries < 200; tries++) {
+        perm = derange(giverIds);
+        // verify cross-tier distinct recipients for each giver
+        for (let i = 0; i < giverIds.length; i++) {
+          const giver = giverIds[i];
+          const recip = perm[i];
+          if (alreadyForGiver.get(giver).has(recip)) {
+            continue attempt; // try another derangement
+          }
+        }
+        break; // good perm
+      }
+      // Insert assignments & record recipient per giver
+      for (let i = 0; i < giverIds.length; i++) {
+        const giver = giverIds[i];
+        const recip = perm[i];
+        insertAssignment.run(randomUUID(), eventId, t.id, giver, recip);
+        alreadyForGiver.get(giver).add(recip);
+      }
+    }
+
+    return pRows;
   });
 
+  let inserted;
   try {
-    tx();
+    inserted = tx();
   } catch (e) {
     return res.status(400).json({ error: e.message });
   }
 
-  const rows = db
-    .prepare(
-      `SELECT name, email, invite_token FROM participants WHERE event_id = ?`
-    )
-    .all(eventId);
+  const base = (req.get("x-forwarded-proto") && req.get("x-forwarded-host"))
+    ? `${req.get("x-forwarded-proto")}://${req.get("x-forwarded-host")}`
+    : (process.env.BASE_URL || "http://localhost:3000");
 
-  const base = process.env.BASE_URL || "http://localhost:3000";
-  const invites = rows.map((r) => ({
+  const invites = inserted.map((r) => ({
     name: r.name,
     email: r.email,
-    link: `${base}/draw?token=${r.invite_token}`,
+    link: `${base}/draw?token=${r.token}`,
   }));
 
   res.json({
-    event: { id: eventId, name: eventName, gifts_per_person: giftsPerPerson },
+    event: { id: eventId, name: eventName, tiers: tierDefs.map(t => ({ id: t.id, name: t.name, budget_cents: t.budget_cents })) },
     invites,
   });
 });

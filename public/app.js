@@ -1,106 +1,160 @@
+// public/app.js
+// Client-side JS for the Draw page (supports multi-tier/budget gifts).
+// Expects backend /api/me and /api/draw to return recipients grouped by tier.
+// Also uses window.triggerConfetti(themeIndex, durationMs) if available.
+
 (function () {
+  // Helpers to get token from querystring
   const params = new URLSearchParams(location.search);
   const token = params.get("token");
 
-  const title = document.getElementById("title");
-  const hello = document.getElementById("hello");
-  const eventName = document.getElementById("eventName");
-  const gpp = document.getElementById("gpp");
-  const recipients = document.getElementById("recipients");
-  const none = document.getElementById("none");
+  // DOM refs
+  const titleEl = document.getElementById("title");
+  const helloEl = document.getElementById("hello");
+  const eventNameEl = document.getElementById("eventName");
+  const gppEl = document.getElementById("gpp");
+  const recipientsEl = document.getElementById("recipients");
+  const noneEl = document.getElementById("none");
   const drawBtn = document.getElementById("drawBtn");
   const errorEl = document.getElementById("error");
-  const note = document.getElementById("note");
+  const noteEl = document.getElementById("note");
+  const resendBtn = document.getElementById("resendBtn"); // may be null if not added
 
   if (!token) {
-    errorEl.textContent = "Invalid or missing invite link.";
-    return;
+    if (errorEl) errorEl.textContent = "Invalid or missing invite link.";
+    if (drawBtn) drawBtn.disabled = true;
+    throw new Error("Missing token");
   }
 
-  function renderRecipients(list) {
-    recipients.innerHTML = "";
-    if (!list || !list.length) {
-      none.style.display = "block";
-    } else {
-      none.style.display = "none";
-      for (const r of list) {
-        const li = document.createElement("li");
-        li.textContent = r;
-        recipients.appendChild(li);
-      }
-    }
-  }
-
-  async function loadMe() {
-    errorEl.textContent = "";
-    const res = await fetch(`/api/me?token=${encodeURIComponent(token)}`);
-    const data = await res.json();
-    if (!res.ok) {
-      errorEl.textContent = data.error || "Failed to load";
-      drawBtn.disabled = true;
+  // Render recipients grouped by tier (ordered list)
+  function renderByTier(list) {
+    recipientsEl.innerHTML = "";
+    if (!Array.isArray(list) || list.length === 0) {
+      noneEl.style.display = "block";
       return;
     }
-    title.textContent = `${data.event.name} — Draw`;
-    hello.textContent = `Hello, ${data.me.name} (${data.me.email})`;
-    eventName.textContent = data.event.name;
-    gpp.textContent = data.event.gifts_per_person;
-    renderRecipients(data.recipients);
+    noneEl.style.display = "none";
 
-    const canDraw =
-      !data.me.has_drawn ||
-      data.recipients.length < data.event.gifts_per_person;
-    drawBtn.disabled = !canDraw;
-    note.textContent = canDraw
-      ? ""
-      : "You’re all set! A confirmation email has been sent.";
+    // create list items: "Gift 1 ($100): Alice"
+    for (const t of list) {
+      const li = document.createElement("li");
+      const dollars = (t.budget_cents / 100).toFixed(0);
+      const recipientText = t.recipient ? t.recipient : "—";
+      li.textContent = `${t.name} ($${dollars}): ${recipientText}`;
+      recipientsEl.appendChild(li);
+    }
   }
 
+  // Load /api/me
+  async function loadMe() {
+    errorEl.textContent = "";
+    try {
+      const res = await fetch(`/api/me?token=${encodeURIComponent(token)}`, { cache: "no-store" });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to load user data");
+      }
+
+      // Update UI
+      titleEl.textContent = `${data.event.name} — Draw`;
+      helloEl.textContent = `Hello, ${data.me.name} (${data.me.email})`;
+      eventNameEl.textContent = data.event.name;
+      // Show number of tiers instead of "gifts per person"
+      gppEl.textContent = (Array.isArray(data.event.tiers) ? data.event.tiers.length : 0);
+
+      renderByTier(data.recipients_by_tier);
+
+      const haveAll = (Array.isArray(data.recipients_by_tier) && data.recipients_by_tier.every(t => !!t.recipient));
+      const canDraw = !data.me.has_drawn || !haveAll;
+      drawBtn.disabled = !canDraw;
+      if (!canDraw) {
+        noteEl.textContent = "You’re all set! A confirmation email has been sent.";
+      } else {
+        noteEl.textContent = "";
+      }
+
+      // If present, toggle resend button availability
+      if (resendBtn) {
+        resendBtn.disabled = !(Array.isArray(data.recipients_by_tier) && data.recipients_by_tier.some(t => !!t.recipient));
+      }
+
+      return data;
+    } catch (err) {
+      errorEl.textContent = String(err.message || err);
+      drawBtn.disabled = true;
+      if (resendBtn) resendBtn.disabled = true;
+      return null;
+    }
+  }
+
+  // Draw action: reveals preassigned recipients and triggers email on server
   async function draw() {
     drawBtn.disabled = true;
     errorEl.textContent = "";
+    const origText = drawBtn.textContent;
     drawBtn.textContent = "Drawing…";
     try {
-      const r = await fetch("/api/draw", {
+      const resp = await fetch("/api/draw", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token }),
       });
-      const d = await r.json();
-      if (!r.ok) {
-        errorEl.textContent = d.error || "Draw failed";
-      } else {
-        // ✅ Fire confetti once on success
-        if (window.triggerConfetti) window.triggerConfetti(0, 5000); // 5s
+      const data = await resp.json();
+      if (!resp.ok) {
+        throw new Error(data.error || "Draw failed");
       }
+
+      // Fire confetti for 5s unless user prefers reduced motion
+      try {
+        const prefersReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        if (!prefersReducedMotion && window.triggerConfetti) {
+          window.triggerConfetti(0, 5000);
+        }
+      } catch (e) {
+        // ignore confetti errors
+        // console.warn("Confetti error", e);
+      }
+
+      // refresh UI to show recipients
       await loadMe();
-    } catch (e) {
-      errorEl.textContent = String(e);
+    } catch (err) {
+      errorEl.textContent = String(err.message || err);
+      // keep button enabled so user can retry if recoverable
+      drawBtn.disabled = false;
     } finally {
-      drawBtn.textContent = "Draw now";
+      drawBtn.textContent = origText;
     }
   }
 
-  drawBtn.addEventListener("click", draw);
-  loadMe();
-
-  const resendBtn = document.getElementById("resendBtn");
-  resendBtn.addEventListener("click", async () => {
+  // Optional: resend assignment email if server supports /api/resend
+  async function resendEmail() {
+    if (!resendBtn) return;
     resendBtn.disabled = true;
     errorEl.textContent = "";
+    const orig = resendBtn.textContent;
+    resendBtn.textContent = "Sending…";
     try {
-      const r = await fetch("/api/resend", {
+      const res = await fetch("/api/resend", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token }),
       });
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error || "Resend failed");
-      note.textContent = "Email sent. Check your inbox.";
-    } catch (e) {
-      errorEl.textContent = String(e);
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error || "Resend failed");
+      noteEl.textContent = "Email re-sent. Check your inbox.";
+    } catch (err) {
+      errorEl.textContent = String(err.message || err);
     } finally {
+      resendBtn.textContent = orig;
+      // allow resend again
       resendBtn.disabled = false;
     }
-  });
+  }
 
+  // Wire up events
+  drawBtn.addEventListener("click", draw);
+  if (resendBtn) resendBtn.addEventListener("click", resendEmail);
+
+  // initial load
+  loadMe();
 })();

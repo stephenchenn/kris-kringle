@@ -3,22 +3,27 @@ LOCAL:
 npm run dev
 
 1. Seed:
-curl -X POST http://localhost:3000/api/admin/seed \
+curl -X POST https://<your-host>/api/admin/seed \
   -H "Content-Type: application/json" \
   -d @- <<'JSON'
 {
   "secret": "<ADMIN_SECRET>",
-  "eventName": "Wong's Kris Kringle 2025",
-  "giftsPerPerson": 2,
+  "eventName": "Wong's Christmas 2025",
   "participants": [
-    {"name":"Stephen","email":"chen.stephen151@gmail.com"},
-    {"name":"Stephen2","email":"chen.stephen141@gmail.com"},
-    {"name":"Clarisse","email":"clarisse@example.com"},
-    {"name":"Liezel","email":"liezel@example.com"},
-    {"name":"Pualine","email":"pualine@example.com"},
-    {"name":"Hana","email":"hana@example.com"},
-    {"name":"Kelvin","email":"kelvin@example.com"},
-    {"name":"Andrew","email":"andrew@example.com"}
+    {"name":"stephen1","email":"chen.stephen151@gmail.com"},
+    {"name":"stephen2","email":"chen.stephen141@gmail.com"},
+    {"name":"Alice","email":"alice@example.com"},
+    {"name":"Bob","email":"bob@example.com"},
+    {"name":"Carol","email":"carol@example.com"},
+    {"name":"Dave","email":"dave@example.com"},
+    {"name":"Eve","email":"eve@example.com"},
+    {"name":"Frank","email":"frank@example.com"},
+    {"name":"Grace","email":"grace@example.com"},
+    {"name":"Heidi","email":"heidi@example.com"}
+  ],
+  "tiers": [
+    { "name": "Gift 1", "budgetCents": 10000 },
+    { "name": "Gift 2", "budgetCents":  5000 }
   ]
 }
 JSON
@@ -65,6 +70,13 @@ JSON
 curl -X POST https://kris-kringle.onrender.com/api/admin/send-invites \
   -H "Content-Type: application/json" \
   -d '{"secret":"<ADMIN_SECRET>","eventId":"<EVENT_ID>"}'
+
+
+
+RESET:
+curl -X POST https://<your-host>/api/admin/reset \
+  -H "Content-Type: application/json" \
+  -d '{"secret":"<ADMIN_SECRET>"}'
 
 ______________________________________________________________________________________________________________________________________________________________________________
 

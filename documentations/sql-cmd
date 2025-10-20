@@ -2,36 +2,77 @@ sqlite3 db.sqlite
 
 .headers on
 .mode box             -- nicer tables; or try .mode column
-.tables               -- list tables
-.schema events        -- show table DDL
+.tables
+.schema events
 .schema participants
+.schema gift_tiers
 .schema assignments
 
--- See data
+
+-- Events and participants
 SELECT * FROM events;
-SELECT id,name,email,has_drawn FROM participants LIMIT 20;
-SELECT giver_id, recipient_id FROM assignments LIMIT 20;
+SELECT id, name, email, has_drawn, invite_token FROM participants LIMIT 50;
 
--- Join to see names
-SELECT g.name AS giver, r.name AS recipient
+-- Gift tiers for an event
+SELECT id, event_id, name, budget_cents, sort_order FROM gift_tiers ORDER BY event_id, sort_order;
+
+-- Raw assignments (tier-aware)
+SELECT id, event_id, tier_id, giver_id, recipient_id, created_at FROM assignments LIMIT 50;
+
+
+-- Who gives who (with tier name & budget)
+SELECT
+  ev.name AS event,
+  t.name AS tier,
+  t.budget_cents,
+  g.name AS giver,
+  r.name AS recipient,
+  a.created_at
 FROM assignments a
-JOIN participants g ON g.id = a.giver_id
-JOIN participants r ON r.id = a.recipient_id
-ORDER BY giver, recipient;
+JOIN events ev       ON ev.id = a.event_id
+JOIN gift_tiers t    ON t.id = a.tier_id
+JOIN participants g  ON g.id = a.giver_id
+JOIN participants r  ON r.id = a.recipient_id
+ORDER BY ev.name, t.sort_order, g.name;
 
--- How many gifts each person has received (balance check)
-SELECT r.name, COUNT(*) AS received
+
+-- How many gifts each person has RECEIVED per tier
+SELECT
+  t.name AS tier,
+  r.name AS recipient,
+  COUNT(*) AS received
+FROM assignments a
+JOIN gift_tiers t ON t.id = a.tier_id
+JOIN participants r ON r.id = a.recipient_id
+GROUP BY t.id, r.id
+ORDER BY t.sort_order, received DESC, r.name;
+
+-- How many gifts each person is GIVING per tier (should be 1 per tier)
+SELECT
+  t.name AS tier,
+  g.name AS giver,
+  COUNT(*) AS giving
+FROM assignments a
+JOIN gift_tiers t ON t.id = a.tier_id
+JOIN participants g ON g.id = a.giver_id
+GROUP BY t.id, g.id
+ORDER BY t.sort_order, giving DESC, g.name;
+
+
+-- Total received across all tiers
+SELECT r.name AS recipient, COUNT(*) AS total_received
 FROM assignments a
 JOIN participants r ON r.id = a.recipient_id
 GROUP BY r.id
-ORDER BY received DESC, r.name;
+ORDER BY total_received DESC, r.name;
 
--- How many gifts each person is giving (should match gifts_per_person)
-SELECT g.name, COUNT(*) AS giving
+-- Total giving across all tiers (should equal number of tiers per person)
+SELECT g.name AS giver, COUNT(*) AS total_giving
 FROM assignments a
 JOIN participants g ON g.id = a.giver_id
 GROUP BY g.id
-ORDER BY giving DESC, g.name;
+ORDER BY total_giving DESC, g.name;
+
 
 .quit
 ___________________________________________________________________________________________________________________________________________________________________________________
