@@ -1,0 +1,28 @@
+curl -X POST http://localhost:3000/api/admin/seed \
+  -H "Content-Type: application/json" \
+  -d @- <<'JSON'
+{
+  "secret": "w1XbhgtyTsnO2diewxDdRm3sM3HZFYqck6i-W1fSjPg",
+  "eventName": "Wong's Christmas 2025",
+  "participants": [
+    {"name":"stephen1","email":"chen.stephen151@gmail.com"},
+    {"name":"stephen2","email":"chen.stephen141@gmail.com"},
+    {"name":"Alice","email":"alice@example.com"},
+    {"name":"Bob","email":"bob@example.com"},
+    {"name":"Carol","email":"carol@example.com"},
+    {"name":"Dave","email":"dave@example.com"},
+    {"name":"Eve","email":"eve@example.com"},
+    {"name":"Frank","email":"frank@example.com"},
+    {"name":"Grace","email":"grace@example.com"},
+    {"name":"Heidi","email":"heidi@example.com"}
+  ],
+  "tiers": [
+    { "name": "Gift 1", "budgetCents": 10000 },
+    { "name": "Gift 2", "budgetCents":  5000 }
+  ]
+}
+JSON
+
+curl -X POST http://localhost:3000/api/admin/send-invites \
+  -H "Content-Type: application/json" \
+  -d '{"secret":"w1XbhgtyTsnO2diewxDdRm3sM3HZFYqck6i-W1fSjPg","eventId":"cf2cd36c-2ef4-4752-8fa1-ca4539d4ded1"}'

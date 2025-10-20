@@ -90,9 +90,23 @@ To Do:
 
 Future Actions
 - Godaddy domain wongskringle.online expires on 15 Oct, 2026 (Auto-renew turned off)
-- SendGrid free trial expires on December 12th, 2025
+- SendGrid free trial expires on December 12th, 2025 (Just use another email for free trial)
 
-To verify domain in SendGrid, got to Sender Authentication -> Domain Authentication -> Authenticate Your Domain -> Add the provided DNS record to your DNS provider
+To verify domain in SendGrid, got to Sender Authentication -> Domain Authentication -> Authenticate Your Domain -> Use config:
+  DNS host: GODaddy
+  From Domain: mail.wongskringle.online (subdomain)
+-> Add the provided DNS record to your DNS provider -> Update env with new Sendgrid API key
 
 Generate Admin Secret:
 openssl rand -base64 32 | tr '+/' '-_' | tr -d '='
+
+Testing:
+node testSeed.js
+
+Note: it checks for:
+  1) For each tier, every participant gives exactly one gift and receives exactly one gift.
+  2) No self-assignments.
+  3) Cross-tier uniqueness: a giver never gifts to the same recipient more than once.
+  4) Throws if constraints are impossible (e.g., tiers > participants - 1).
+
+  Max tier count is (number of participants - 1) since we don't want anyone to gift to the same person more than once
