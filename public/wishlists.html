@@ -99,11 +99,95 @@
             color: #374151;
             border: 1px solid #e5e7eb;
         }
+
+        /* collapse helpers */
+        .collapse {
+            overflow: hidden;
+            transition: max-height 0.25s ease;
+        }
+
+        .collapse.collapsed {
+            max-height: 0;
+        }
+
+        .collapse.expanded {
+            max-height: 2000px;
+        }
+
+        /* big enough for most lists */
+
+        .btn-link {
+            background: transparent;
+            color: #2563eb;
+            border: none;
+            padding: 0;
+            cursor: pointer;
+        }
+
+        .card {
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .card-header .left {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            min-width: 0;
+        }
+
+        .card-header .right {
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .owner {
+            font-weight: 600;
+            margin: 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .input,
+        textarea.input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+        }
+
+        .input-row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin: 8px 0;
+        }
+
+        .input-row .half {
+            flex: 1 1 220px;
+        }
+
+        .input-row .full {
+            flex: 1 1 100%;
+        }
     </style>
 </head>
 
 <body>
-    <h1>Everyone’s Wishlists</h1>
+    <h1>Kris Kringle Wishlists</h1>
     <div class="muted">Authenticated by your invite token. You can reserve items anonymously so no one buys duplicates.
     </div>
 
@@ -111,6 +195,29 @@
     <div id="root" class="grid"></div>
 
     <script>
+        function centsFromPrice(p) {
+            if (!p) return null;
+            const n = Number(String(p).replace(/[$,\s]/g, ''));
+            return Number.isFinite(n) ? Math.round(n * 100) : null;
+        }
+
+        async function addMyItem({ title, url, notes, price, image_url }) {
+            const resp = await fetch('/api/wishlist/item', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    token,
+                    title: (title || '').trim(),
+                    url: (url || '').trim() || null,
+                    notes: (notes || '').trim() || null,
+                    price_cents: centsFromPrice(price),
+                    image_url: (image_url || '').trim() || null
+                })
+            });
+            const out = await resp.json().catch(() => ({}));
+            if (!resp.ok) throw new Error(out.error || 'Failed to add');
+        }
+
+
         const qs = new URLSearchParams(location.search);
         const token = qs.get('token');
         if (!token) { document.body.innerHTML = '<p class="muted">Missing token</p>'; throw new Error('missing token'); }
@@ -152,22 +259,95 @@
             const meId = data.me?.id;
             const allowed = new Set(data.allowed_owner_ids || []);
 
-
             data.wishlists.forEach(({ owner, items }) => {
                 const card = document.createElement('div'); card.className = 'card';
 
-                const ownerRow = document.createElement('div'); ownerRow.className = 'row';
+                // Header row (left: name + "you", right: collapse)
+                const header = document.createElement('div'); header.className = 'card-header';
+
+                const left = document.createElement('div'); left.className = 'left';
                 const nameEl = document.createElement('div'); nameEl.className = 'owner'; nameEl.textContent = owner.name;
-                ownerRow.appendChild(nameEl);
+                left.appendChild(nameEl);
                 if (owner.id === meId) {
                     const pill = document.createElement('span'); pill.className = 'pill gray'; pill.textContent = 'you';
-                    ownerRow.appendChild(pill);
+                    left.appendChild(pill);
                 }
-                card.appendChild(ownerRow);
+
+                const right = document.createElement('div'); right.className = 'right';
+                const count = (items && items.length) || 0;
+                const sectionId = `wl-${owner.id}`;
+                const toggle = document.createElement('button');
+                toggle.type = 'button';
+                toggle.className = 'btn-link';
+                toggle.setAttribute('aria-controls', sectionId);
+                toggle.setAttribute('aria-expanded', 'true'); // default expanded
+                toggle.textContent = count ? `Collapse (${count})` : 'Collapse';
+                toggle.onclick = () => {
+                    const panel = document.getElementById(sectionId);
+                    const nowCollapsed = panel.classList.contains('expanded');
+                    panel.classList.toggle('expanded', !nowCollapsed);
+                    panel.classList.toggle('collapsed', nowCollapsed);
+                    toggle.setAttribute('aria-expanded', String(!nowCollapsed));
+                    toggle.textContent = (!nowCollapsed) ? `Collapse (${count})` : `Expand (${count})`;
+                };
+                right.appendChild(toggle);
+
+                header.append(left, right);
+                card.appendChild(header);
+
+
+                // Collapsible panel that holds all items for this owner
+                const panel = document.createElement('div');
+                panel.id = sectionId;
+                panel.className = 'collapse expanded'; // default expanded; switch to 'collapsed' if you want closed by default
+                card.appendChild(panel);
+
+                // If this is my card, show an Add form at the top of the panel
+                if (owner.id === meId) {
+                    const form = document.createElement('div'); form.className = 'item';
+                    const h = document.createElement('div'); h.style.fontWeight = '600'; h.textContent = 'Add item';
+                    form.appendChild(h);
+
+                    const r1 = document.createElement('div'); r1.className = 'input-row';
+                    const inTitle = document.createElement('input'); inTitle.className = 'input full'; inTitle.placeholder = 'Title *';
+                    r1.appendChild(inTitle);
+
+                    const r2 = document.createElement('div'); r2.className = 'input-row';
+                    const inUrl = document.createElement('input'); inUrl.className = 'input half'; inUrl.placeholder = 'Product link (optional)';
+                    const inPrice = document.createElement('input'); inPrice.className = 'input half'; inPrice.placeholder = 'Target price (e.g. 49.99)';
+                    r2.append(inUrl, inPrice);
+
+                    const r3 = document.createElement('div'); r3.className = 'input-row';
+                    const inImage = document.createElement('input'); inImage.className = 'input half'; inImage.placeholder = 'Image URL (optional)';
+                    const inNotes = document.createElement('textarea'); inNotes.className = 'input half'; inNotes.rows = 2; inNotes.placeholder = 'Notes (size, color, etc.)';
+                    r3.append(inImage, inNotes);
+
+                    const r4 = document.createElement('div'); r4.className = 'row';
+                    const addBtn = document.createElement('button'); addBtn.textContent = 'Add';
+                    const msg = document.createElement('span'); msg.className = 'muted';
+                    addBtn.onclick = async () => {
+                        msg.textContent = '';
+                        try {
+                            if (!inTitle.value.trim()) { msg.textContent = 'Title required'; return; }
+                            await addMyItem({
+                                title: inTitle.value, url: inUrl.value, notes: inNotes.value,
+                                price: inPrice.value, image_url: inImage.value
+                            });
+                            inTitle.value = inUrl.value = inNotes.value = inPrice.value = inImage.value = '';
+                            msg.textContent = 'Added!';
+                            await loadAll();
+                        } catch (e) { msg.textContent = e.message || 'Failed'; }
+                    };
+                    r4.append(addBtn, msg);
+
+                    form.append(r1, r2, r3, r4);
+                    panel.appendChild(form);
+                }
+
 
                 if (!items || items.length === 0) {
                     const empty = document.createElement('div'); empty.className = 'muted'; empty.textContent = 'No items yet';
-                    card.appendChild(empty);
+                    panel.appendChild(empty);
                 } else {
                     items.forEach(it => {
                         const box = document.createElement('div'); box.className = 'item';
@@ -178,31 +358,35 @@
                         if (it.notes) { const notes = document.createElement('div'); notes.textContent = it.notes; box.appendChild(notes); }
                         if (it.price_cents != null) { const pr = document.createElement('div'); pr.className = 'muted'; pr.textContent = fmtPrice(it.price_cents); box.appendChild(pr); }
 
-                        const row = document.createElement('div'); row.className = 'row';
+                        const row = document.createElement('div');
+                        row.className = 'row';
 
-                        const canAct = allowed.has(owner.id) && owner.id !== meId; // ✅ only if assigned, and not your own list
+                        const canAct = allowed.has(owner.id) && owner.id !== meId; // assigned & not your own
+                        const canReserve = canAct && !it.is_reserved;
+                        const canUnreserve = !!it.reserved_by_me;                  // 👈 only the reserver sees Unreserve
 
-                        if (canAct) {
-                            if (it.is_reserved) {
-                                const reserved = document.createElement('span'); reserved.className = 'pill green'; reserved.textContent = 'Reserved';
-                                const btn = document.createElement('button'); btn.textContent = 'Unreserve';
-                                btn.onclick = () => unreserve(it.id); // server will also verify you’re the reserver
-                                row.append(reserved, btn);
-                            } else {
-                                const btn = document.createElement('button'); btn.textContent = 'Reserve';
-                                btn.onclick = () => reserve(it.id);
+                        if (it.is_reserved) {
+                            const reserved = document.createElement('span');
+                            reserved.className = 'pill green';
+                            reserved.textContent = 'Reserved';
+                            row.append(reserved);
+
+                            if (canUnreserve) {
+                                const btn = document.createElement('button');
+                                btn.textContent = 'Unreserve';
+                                btn.onclick = () => unreserve(it.id);
                                 row.append(btn);
                             }
-                        } else {
-                            // not allowed: show status only
-                            if (it.is_reserved) {
-                                const reserved = document.createElement('span'); reserved.className = 'pill green'; reserved.textContent = 'Reserved';
-                                row.append(reserved);
-                            }
+                        } else if (canReserve) {
+                            const btn = document.createElement('button');
+                            btn.textContent = 'Reserve';
+                            btn.onclick = () => reserve(it.id);
+                            row.append(btn);
                         }
+                        // else: show nothing
 
                         box.appendChild(row);
-                        card.appendChild(box);
+                        panel.appendChild(box); // ⬅️ append to the collapsible panel
                     });
                 }
 

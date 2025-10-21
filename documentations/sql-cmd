@@ -12,6 +12,7 @@ sqlite3 db.sqlite
 
 -- Events and participants
 SELECT * FROM events;
+SELECT * FROM assignments;
 SELECT id, name, email, has_drawn, invite_token FROM participants LIMIT 50;
 
 -- Gift tiers for an event

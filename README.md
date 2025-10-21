@@ -7,7 +7,7 @@ curl -X POST http://localhost:3000/api/admin/seed \
   -H "Content-Type: application/json" \
   -d @- <<'JSON'
 {
-  "secret": "<ADMIN_SECRET>",
+  "secret": "w1XbhgtyTsnO2diewxDdRm3sM3HZFYqck6i-W1fSjPg",
   "eventName": "Wong's Christmas 2025",
   "participants": [
     {"name":"stephen1","email":"chen.stephen151@gmail.com"},

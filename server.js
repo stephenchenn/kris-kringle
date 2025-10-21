@@ -53,8 +53,7 @@ CREATE TABLE IF NOT EXISTS gift_tiers (
 -- constraints:
 --  - one assignment per giver per tier (giver gives exactly one per tier)
 --  - one assignment per recipient per tier (recipient receives exactly one per tier)
-DROP TABLE IF EXISTS assignments;
-CREATE TABLE assignments (
+CREATE TABLE IF NOT EXISTS assignments (
   id TEXT PRIMARY KEY,
   event_id TEXT NOT NULL,
   tier_id TEXT NOT NULL,
@@ -639,31 +638,6 @@ app.get('/api/wishlist/me', (req, res) => {
   res.json({ wishlist: wl, items });
 });
 
-
-// --- Wishlist: view another participant (same event). Hides who reserved; returns boolean only ---
-app.get('/api/wishlist/view', (req, res) => {
-  const me = requireMeByToken(req.query.token);
-  const owner_id = req.query.owner_id;
-  if (!me) return res.status(401).json({ error: 'invalid token' });
-  if (!owner_id) return res.status(400).json({ error: 'missing owner_id' });
-
-  const owner = db.prepare(`SELECT id,event_id FROM participants WHERE id=?`).get(owner_id);
-  if (!owner || owner.event_id !== me.event_id) return res.status(404).json({ error: 'not found' });
-
-  const wl = db.prepare(`SELECT id FROM wishlists WHERE event_id=? AND owner_id=?`).get(me.event_id, owner_id);
-  if (!wl) return res.json({ wishlist: null, items: [] });
-
-  const rows = db.prepare(`
-    SELECT id, title, url, notes, price_cents, image_url,
-           CASE WHEN reserved_by IS NULL THEN 0 ELSE 1 END AS is_reserved
-    FROM wishlist_items
-    WHERE wishlist_id=?
-    ORDER BY created_at DESC
-  `).all(wl.id);
-
-  res.json({ wishlist: { id: wl.id, owner_id }, items: rows });
-});
-
 // --- Wishlist: create item (owner only) ---
 app.post('/api/wishlist/item', (req, res) => {
   const { token, title, url, notes, price_cents, image_url } = req.body || {};
@@ -818,7 +792,6 @@ app.get('/api/wishlists/all', (req, res) => {
     ORDER BY name COLLATE NOCASE
   `).all(me.event_id);
 
-  // who I am assigned to across tiers
   const myRecipients = getRecipientsForGiver(me.event_id, me.pid); // [{id,name}]
   const allowedOwnerIds = new Set(myRecipients.map(r => r.id));
 
@@ -826,12 +799,13 @@ app.get('/api/wishlists/all', (req, res) => {
     SELECT wl.owner_id,
            wi.id AS item_id, wi.title, wi.url, wi.notes, wi.price_cents, wi.image_url,
            CASE WHEN wi.reserved_by IS NULL THEN 0 ELSE 1 END AS is_reserved,
+           CASE WHEN wi.reserved_by = ? THEN 1 ELSE 0 END AS reserved_by_me,
            wi.created_at
     FROM wishlists wl
     LEFT JOIN wishlist_items wi ON wi.wishlist_id = wl.id
     WHERE wl.event_id = ?
     ORDER BY wi.created_at DESC
-  `).all(me.event_id);
+  `).all(me.pid, me.event_id);  // 👈 pass me.pid
 
   const byOwner = new Map(people.map(p => [p.id, { owner: p, items: [] }]));
   for (const r of rows) {
@@ -845,21 +819,20 @@ app.get('/api/wishlists/all', (req, res) => {
         notes: r.notes,
         price_cents: r.price_cents,
         image_url: r.image_url,
-        is_reserved: r.is_reserved
+        is_reserved: r.is_reserved,
+        reserved_by_me: r.reserved_by_me,  // 👈 new
       });
     }
   }
 
   res.json({
     me: { id: me.pid, name: me.pname },
-    allowed_owner_ids: Array.from(allowedOwnerIds),     // ✅ add this
+    event: { id: me.event_id, name: me.ename },      // 👈 add this
+    allowed_owner_ids: Array.from(allowedOwnerIds),
     participants: people,
     wishlists: people.map(p => byOwner.get(p.id) || { owner: p, items: [] })
   });
 });
-
-
-
 
 
 // lightweight liveness check
