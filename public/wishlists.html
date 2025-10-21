@@ -6,6 +6,45 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Kris Kringle Wishlists</title>
     <style>
+        /* ===== Pastel background (choose one) ===== */
+        :root {
+            /* Soft lavender */
+            --page-bg: #f6f3ff;
+            /* Alt ideas:
+                --page-bg: #fef7fb;   // blush pink
+                --page-bg: #f3fbff;   // powder blue
+                --page-bg: #f5fff7;   // mint
+            */
+            --card-bg: #ffffff;
+            --card-border: #e5e7eb;
+            --shadow: 0 1px 2px rgba(16, 24, 40, .06), 0 1px 1px rgba(16, 24, 40, .04);
+        }
+
+        html,
+        body {
+            background: var(--page-bg);
+        }
+
+        /* Keep content readable on the pastel */
+        body {
+            backdrop-filter: saturate(1.05);
+        }
+
+        /* Make cards pop a bit against the pastel */
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            box-shadow: var(--shadow);
+        }
+
+        /* Optional: soften the add form box too */
+        .add-wrap,
+        .greeting {
+            background: #fff;
+            box-shadow: var(--shadow);
+        }
+
+
         body {
             font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
             margin: 24px;
@@ -53,8 +92,9 @@
         .card-header .right {
             display: inline-flex;
             align-items: center;
-            gap: 12px;
+            gap: 8px;
         }
+
 
         .owner {
             font-weight: 600;
@@ -199,6 +239,7 @@
             border-radius: 12px;
             background: #fafaf9;
             /* subtle warm tint */
+            white-space: pre-line;
         }
 
         @media (min-width: 768px) {
@@ -214,12 +255,100 @@
             margin: 4px 0 10px;
         }
 
-        
+        /* Toggle button */
+        /* Compact toggle pill */
+        .btn-toggle {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            border: 1px solid #e5e7eb;
+            background: #fff;
+            padding: 4px 8px;
+            border-radius: 9999px;
+            cursor: pointer;
+            font-weight: 500;
+            font-size: 13px;
+            line-height: 1;
+            /* tighter line height */
+            color: #374151;
+            transition: background .15s ease, border-color .15s ease, box-shadow .15s ease;
+        }
+
+        .btn-toggle:hover {
+            background: #f9fafb;
+            border-color: #d1d5db;
+        }
+
+        .btn-toggle:focus-visible {
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, .35);
+        }
+
+        /* Smaller, better-aligned chevron */
+        .chev {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            /* smaller */
+            border-right: 1.75px solid currentColor;
+            border-bottom: 1.75px solid currentColor;
+            transform: rotate(-45deg);
+            /* ▶ collapsed */
+            transform-origin: 50% 50%;
+            margin-right: 0;
+            /* no extra gap */
+            position: relative;
+            top: 0.5px;
+            /* nudges baseline alignment */
+        }
+
+        .chev.expanded {
+            transform: rotate(45deg);
+        }
+
+        /* ▼ expanded */
+
+        /* Smaller badge so the pill feels balanced */
+        .badge {
+            display: inline-block;
+            min-width: 18px;
+            padding: 2px 6px;
+            font-size: 11px;
+            line-height: 1;
+            text-align: center;
+            border-radius: 9999px;
+            background: #f3f4f6;
+            color: #374151;
+            border: 1px solid #e5e7eb;
+        }
+
+        /* Respect prefers-reduced-motion */
+        @media (prefers-reduced-motion: reduce) {
+            .chev {
+                transition: none;
+            }
+
+            .btn-toggle {
+                transition: none;
+            }
+        }
+
+        /* Constrain layout on desktop and center it */
+        @media (min-width: 1024px) {
+            body {
+                max-width: 1100px;
+                /* tweak to taste: 960–1200px works well */
+                margin: 24px auto;
+                /* centers the page */
+                padding: 0 12px;
+                /* a little side breathing room */
+            }
+        }
     </style>
 </head>
 
 <body>
-    <h1>Everyone’s Wishlists</h1>
+    <h1>Wong's Kris Kringle Wishlists</h1>
     <div class="muted">Authenticated by your invite token. You can reserve items anonymously so no one buys duplicates.
     </div>
 
@@ -368,8 +497,9 @@
             // Greeting outside the box
             const meName = data.me?.name || 'there';
             const eventName = data.event?.name || 'your event';
-            greetEl.textContent = `Hi ${meName}! Welcome :) Please submit what you'd like to receive this year at ${eventName}.`;
+            greetEl.textContent = `Hi ${meName}! Welcome :)\n\nPlease submit what you'd like to receive this year at ${eventName}.`;
             greetEl.hidden = false;
+
 
             // Show the add box
             addWrap.hidden = false;
@@ -431,13 +561,30 @@
                 card.appendChild(panel);
 
                 if (count > 0) {
-                    // Toggle
+                    const sectionId = `wl-${owner.id}`;
+                    const wasCollapsed = (collapsedMap?.[owner.id] !== undefined) ? !!collapsedMap[owner.id] : true;
+
+                    // Toggle button UI
                     const toggle = document.createElement('button');
                     toggle.type = 'button';
-                    toggle.className = 'btn-link';
+                    toggle.className = 'btn-toggle';
                     toggle.setAttribute('aria-controls', sectionId);
                     toggle.setAttribute('aria-expanded', String(!wasCollapsed));
-                    toggle.textContent = wasCollapsed ? `Expand (${count})` : `Collapse (${count})`;
+
+                    // Build inner content: chevron + label + badge
+                    const chev = document.createElement('span');
+                    chev.className = 'chev' + (wasCollapsed ? '' : ' expanded');
+
+                    const label = document.createElement('span');
+                    label.textContent = wasCollapsed ? 'Expand' : 'Collapse';
+
+                    const badge = document.createElement('span');
+                    badge.className = 'badge';
+                    badge.textContent = String(count);
+
+                    toggle.append(chev, label, badge);
+
+                    // Toggle behavior
                     toggle.onclick = () => {
                         const nowCollapsed = panel.classList.contains('expanded'); // we’ll flip
                         panel.classList.toggle('expanded', !nowCollapsed);
@@ -445,13 +592,17 @@
 
                         // save new state
                         const map = loadCollapsedMap();
-                        map[owner.id] = nowCollapsed; // if it WAS expanded, we are collapsing now
+                        map[owner.id] = nowCollapsed;
                         saveCollapsedMap(map);
 
+                        // update UI
                         toggle.setAttribute('aria-expanded', String(!nowCollapsed));
-                        toggle.textContent = (!nowCollapsed) ? `Collapse (${count})` : `Expand (${count})`;
+                        label.textContent = (!nowCollapsed) ? 'Collapse' : 'Expand';
+                        chev.classList.toggle('expanded', !nowCollapsed);
                     };
+
                     right.appendChild(toggle);
+
 
                     // Items
                     items.forEach(it => {
