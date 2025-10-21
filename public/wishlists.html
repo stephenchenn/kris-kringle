@@ -1,0 +1,217 @@
+<!doctype html>
+<html>
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Kris Kringle Wishlists</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+            margin: 24px;
+        }
+
+        h1 {
+            margin-bottom: 8px;
+        }
+
+        .muted {
+            color: #6b7280;
+            font-size: 14px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 16px;
+        }
+
+        .card {
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 12px;
+        }
+
+        .owner {
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .item {
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            padding: 10px;
+            margin: 8px 0;
+        }
+
+        .row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        button {
+            padding: 6px 10px;
+            border-radius: 8px;
+            border: 1px solid #d1d5db;
+            background: #111;
+            color: #fff;
+            cursor: pointer;
+        }
+
+        button[disabled] {
+            opacity: .5;
+            cursor: not-allowed;
+        }
+
+        img {
+            max-width: 100%;
+            border-radius: 8px;
+            display: block;
+            margin: 6px 0;
+        }
+
+        a {
+            color: #2563eb;
+            text-decoration: none;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+
+        .pill {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 9999px;
+            font-size: 12px;
+        }
+
+        .pill.green {
+            background: #ecfdf5;
+            color: #065f46;
+            border: 1px solid #a7f3d0;
+        }
+
+        .pill.gray {
+            background: #f3f4f6;
+            color: #374151;
+            border: 1px solid #e5e7eb;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Everyone’s Wishlists</h1>
+    <div class="muted">Authenticated by your invite token. You can reserve items anonymously so no one buys duplicates.
+    </div>
+
+    <div id="notice" class="muted" style="margin:10px 0;"></div>
+    <div id="root" class="grid"></div>
+
+    <script>
+        const qs = new URLSearchParams(location.search);
+        const token = qs.get('token');
+        if (!token) { document.body.innerHTML = '<p class="muted">Missing token</p>'; throw new Error('missing token'); }
+
+        const root = document.getElementById('root');
+        const notice = document.getElementById('notice');
+
+        function fmtPrice(cents) { return (cents == null || isNaN(cents)) ? '' : `$${(cents / 100).toFixed(2)}`; }
+
+        async function loadAll() {
+            const r = await fetch(`/api/wishlists/all?token=${encodeURIComponent(token)}`);
+            const data = await r.json();
+            if (!r.ok) { notice.textContent = data.error || 'Failed to load'; return; }
+            renderAll(data);
+        }
+
+        async function reserve(itemId) {
+            const r = await fetch(`/api/wishlist/item/${itemId}/reserve`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token })
+            });
+            const out = await r.json().catch(() => ({}));
+            if (!r.ok) notice.textContent = out.error || 'Could not reserve';
+            await loadAll();
+        }
+
+        async function unreserve(itemId) {
+            const r = await fetch(`/api/wishlist/item/${itemId}/unreserve`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token })
+            });
+            const out = await r.json().catch(() => ({}));
+            if (!r.ok) notice.textContent = out.error || 'Could not unreserve';
+            await loadAll();
+        }
+
+        function renderAll(data) {
+            root.innerHTML = '';
+            const meId = data.me?.id;
+            const allowed = new Set(data.allowed_owner_ids || []);
+
+
+            data.wishlists.forEach(({ owner, items }) => {
+                const card = document.createElement('div'); card.className = 'card';
+
+                const ownerRow = document.createElement('div'); ownerRow.className = 'row';
+                const nameEl = document.createElement('div'); nameEl.className = 'owner'; nameEl.textContent = owner.name;
+                ownerRow.appendChild(nameEl);
+                if (owner.id === meId) {
+                    const pill = document.createElement('span'); pill.className = 'pill gray'; pill.textContent = 'you';
+                    ownerRow.appendChild(pill);
+                }
+                card.appendChild(ownerRow);
+
+                if (!items || items.length === 0) {
+                    const empty = document.createElement('div'); empty.className = 'muted'; empty.textContent = 'No items yet';
+                    card.appendChild(empty);
+                } else {
+                    items.forEach(it => {
+                        const box = document.createElement('div'); box.className = 'item';
+                        const title = document.createElement('div'); title.style.fontWeight = '600'; title.style.margin = '4px 0'; title.textContent = it.title;
+                        box.appendChild(title);
+                        if (it.image_url) { const img = document.createElement('img'); img.src = it.image_url; img.alt = it.title; box.appendChild(img); }
+                        if (it.url) { const a = document.createElement('a'); a.href = it.url; a.target = '_blank'; a.rel = 'noopener'; a.textContent = 'View link'; box.appendChild(a); }
+                        if (it.notes) { const notes = document.createElement('div'); notes.textContent = it.notes; box.appendChild(notes); }
+                        if (it.price_cents != null) { const pr = document.createElement('div'); pr.className = 'muted'; pr.textContent = fmtPrice(it.price_cents); box.appendChild(pr); }
+
+                        const row = document.createElement('div'); row.className = 'row';
+
+                        const canAct = allowed.has(owner.id) && owner.id !== meId; // ✅ only if assigned, and not your own list
+
+                        if (canAct) {
+                            if (it.is_reserved) {
+                                const reserved = document.createElement('span'); reserved.className = 'pill green'; reserved.textContent = 'Reserved';
+                                const btn = document.createElement('button'); btn.textContent = 'Unreserve';
+                                btn.onclick = () => unreserve(it.id); // server will also verify you’re the reserver
+                                row.append(reserved, btn);
+                            } else {
+                                const btn = document.createElement('button'); btn.textContent = 'Reserve';
+                                btn.onclick = () => reserve(it.id);
+                                row.append(btn);
+                            }
+                        } else {
+                            // not allowed: show status only
+                            if (it.is_reserved) {
+                                const reserved = document.createElement('span'); reserved.className = 'pill green'; reserved.textContent = 'Reserved';
+                                row.append(reserved);
+                            }
+                        }
+
+                        box.appendChild(row);
+                        card.appendChild(box);
+                    });
+                }
+
+                root.appendChild(card);
+            });
+        }
+
+        loadAll();
+    </script>
+</body>
+
+</html>

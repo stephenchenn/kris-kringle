@@ -11,8 +11,9 @@ curl -X POST http://localhost:3000/api/admin/seed \
   "eventName": "Wong's Christmas 2025",
   "participants": [
     {"name":"stephen1","email":"chen.stephen151@gmail.com"},
-    {"name":"stephen2","email":"chen.stephen141@gmail.com"},
-    {"name":"Alice","email":"alice@example.com"}
+    {"name":"Liezel","email":"liezel@example.com"},
+    {"name":"Clarisse","email":"clarisse@example.com"},
+    {"name":"Hana","email":"hana@example.com"}
   ],
   "tiers": [
     { "name": "Gift 1", "budgetCents": 10000 },
@@ -24,13 +25,13 @@ JSON
 2. Send invites to participants:
 curl -X POST http://localhost:3000/api/admin/send-invites \
   -H "Content-Type: application/json" \
-  -d '{"secret":"<ADMIN_SECRET>","eventId":""}'
+  -d '{"secret":"<ADMIN_SECRET>","eventId":"7e0669d4-386d-473f-be58-c3261df58388"}'
 ______________________________________________________________________________________________________________________________________________________________________________
 
 3. Each Recipients do the draw:
 curl -X POST http://localhost:3000/api/draw \
   -H "Content-Type: application/json" \
-  -d '{"token":"<recipient-token>"}'
+  -d '{"token":"f0a3d313-f678-4071-9b4c-53ba38989769"}'
 
 4. Check your identity + current recipients
 curl "http://localhost:3000/api/me?token=<recipient-token>"
