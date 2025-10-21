@@ -213,6 +213,8 @@
             font-weight: 600;
             margin: 4px 0 10px;
         }
+
+        
     </style>
 </head>
 
@@ -274,6 +276,26 @@
             return Number.isFinite(n) ? Math.round(n * 100) : null;
         }
 
+        function fmtWholeDollars(cents) {
+            if (cents == null || isNaN(cents)) return null;
+            return `$${(cents / 100).toFixed(0)}`;
+        }
+        function joinWithOr(parts) {
+            if (parts.length <= 1) return parts.join('');
+            if (parts.length === 2) return parts.join(' or ');
+            return parts.slice(0, -1).join(', ') + ' or ' + parts.slice(-1);
+        }
+
+        const LS_KEY = 'kk_wl_collapsed_v1'; // { [ownerId]: true|false }  true = collapsed
+        function loadCollapsedMap() {
+            try { return JSON.parse(localStorage.getItem(LS_KEY) || '{}'); } catch { return {}; }
+        }
+        function saveCollapsedMap(map) {
+            try { localStorage.setItem(LS_KEY, JSON.stringify(map)); } catch { }
+        }
+
+
+
         async function addMyItem({ title, url, notes, price, image_url }) {
             const resp = await fetch('/api/wishlist/item', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -319,21 +341,28 @@
             const data = await r.json();
             if (!r.ok) { notice.textContent = data.error || 'Failed to load'; return; }
 
-            // Build: "$50 for Gift 1 OR $25 for Gift 2"
-            const t = (data.tiers || []);
-            const tiersLabel = t
-                .filter(tt => Number.isFinite(tt.budget_cents) && tt.budget_cents > 0)
-                .map(tt => `${fmtDollars(tt.budget_cents)} for ${tt.name}`)
-                .join(' OR ');
+            // Build: "Budgets are $50 for Gift 1 or $25 for Gift 2"
+            const tiers = Array.isArray(data.tiers) ? data.tiers : [];
+            const pieces = tiers.map(t => {
+                const b = fmtWholeDollars(t.budget_cents);
+                return b ? `${b} for ${t.name}` : null;
+            }).filter(Boolean);
 
-            // Set placeholder + tooltip
-            if (tiersLabel) {
-                inPrice.placeholder = `Target price (${tiersLabel})`;
-                inPrice.title = tiersLabel;
+            if (pieces.length > 0) {
+                const budgetsText = joinWithOr(pieces);
+                inPrice.placeholder = `Gift Price (Budgets are ${budgetsText})`;
+                inPrice.title = `Budgets are ${budgetsText}`;
+            } else if (tiers.length > 0) {
+                // No budgets set, just show tier names
+                const names = joinWithOr(tiers.map(t => t.name));
+                inPrice.placeholder = `Gift Price (${names})`;
+                inPrice.title = names;
             } else {
-                inPrice.placeholder = 'Target price (e.g. 49.99)';
+                // Fallback
+                inPrice.placeholder = 'Gift Price (e.g. 49.99)';
                 inPrice.title = '';
             }
+
 
 
             // Greeting outside the box
@@ -373,6 +402,7 @@
             root.innerHTML = '';
             const meId = data.me?.id;
             const allowed = new Set(data.allowed_owner_ids || []);
+            const collapsedMap = loadCollapsedMap(); // 👈 load saved states
 
             data.wishlists.forEach(({ owner, items }) => {
                 const card = document.createElement('div'); card.className = 'card';
@@ -388,33 +418,42 @@
                 }
                 const right = document.createElement('div'); right.className = 'right';
                 const count = (items && items.length) || 0;
+                const sectionId = `wl-${owner.id}`;
+
+                header.append(left, right);
+                card.appendChild(header);
+
+                // Items panel — default collapsed; use saved state if present
+                const panel = document.createElement('div');
+                panel.id = sectionId;
+                const wasCollapsed = (collapsedMap[owner.id] !== undefined) ? !!collapsedMap[owner.id] : true; // 👈 default collapsed
+                panel.className = `collapse ${wasCollapsed ? 'collapsed' : 'expanded'}`;
+                card.appendChild(panel);
+
                 if (count > 0) {
-                    const sectionId = `wl-${owner.id}`;
+                    // Toggle
                     const toggle = document.createElement('button');
                     toggle.type = 'button';
                     toggle.className = 'btn-link';
                     toggle.setAttribute('aria-controls', sectionId);
-                    toggle.setAttribute('aria-expanded', 'true');
-                    toggle.textContent = `Collapse (${count})`;
+                    toggle.setAttribute('aria-expanded', String(!wasCollapsed));
+                    toggle.textContent = wasCollapsed ? `Expand (${count})` : `Collapse (${count})`;
                     toggle.onclick = () => {
-                        const panel = document.getElementById(sectionId);
-                        const nowCollapsed = panel.classList.contains('expanded');
+                        const nowCollapsed = panel.classList.contains('expanded'); // we’ll flip
                         panel.classList.toggle('expanded', !nowCollapsed);
                         panel.classList.toggle('collapsed', nowCollapsed);
+
+                        // save new state
+                        const map = loadCollapsedMap();
+                        map[owner.id] = nowCollapsed; // if it WAS expanded, we are collapsing now
+                        saveCollapsedMap(map);
+
                         toggle.setAttribute('aria-expanded', String(!nowCollapsed));
                         toggle.textContent = (!nowCollapsed) ? `Collapse (${count})` : `Expand (${count})`;
                     };
                     right.appendChild(toggle);
 
-                    header.append(left, right);
-                    card.appendChild(header);
-
-                    // Items panel
-                    const panel = document.createElement('div');
-                    panel.id = sectionId;
-                    panel.className = 'collapse expanded';
-                    card.appendChild(panel);
-
+                    // Items
                     items.forEach(it => {
                         const box = document.createElement('div'); box.className = 'item';
                         const title = document.createElement('div'); title.style.fontWeight = '600'; title.style.margin = '4px 0'; title.textContent = it.title;
@@ -425,7 +464,6 @@
                         if (it.price_cents != null) { const pr = document.createElement('div'); pr.className = 'muted'; pr.textContent = fmtPrice(it.price_cents); box.appendChild(pr); }
 
                         const row = document.createElement('div'); row.className = 'row';
-
                         const canAct = allowed.has(owner.id) && owner.id !== meId; // assigned & not your own
                         const canReserve = canAct && !it.is_reserved;
                         const canUnreserve = !!it.reserved_by_me;                  // only the reserver sees Unreserve
@@ -449,9 +487,7 @@
                     });
 
                 } else {
-                    // No items: just header + empty state
-                    header.append(left, right);
-                    card.appendChild(header);
+                    // No items: just header + empty state (still track collapsed state)
                     const empty = document.createElement('div'); empty.className = 'muted'; empty.textContent = 'No items yet';
                     card.appendChild(empty);
                 }
