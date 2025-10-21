@@ -63,7 +63,12 @@
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
             gap: 16px;
+            align-items: start;
+            /* ← prevent row mates from stretching */
+            align-content: start;
+            /* extra safety for some browsers */
         }
+
 
         .card {
             border: 1px solid #e5e7eb;
@@ -208,6 +213,9 @@
             padding: 8px;
             border: 1px solid #d1d5db;
             border-radius: 8px;
+            max-width: 100%;
+            box-sizing: border-box;
+
         }
 
         .input-row {
@@ -344,6 +352,167 @@
                 /* a little side breathing room */
             }
         }
+
+        /* Put delete button in the item’s top-right */
+        /* Item container */
+        .item {
+            position: relative;
+        }
+
+        /* Floating toolbar that holds Edit + Delete */
+        .item-toolbar {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            display: flex;
+            gap: 6px;
+            background: #fff;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 4px 6px;
+            box-shadow: var(--shadow);
+            z-index: 2;
+        }
+
+        /* Give room so title/image don’t sit under the toolbar */
+        .item.has-toolbar {
+            padding-top: 56px;
+        }
+
+        @media (min-width: 640px) {
+            .item.has-toolbar {
+                padding-top: 48px;
+            }
+
+            /* a bit tighter on wider screens */
+        }
+
+        /* Buttons inside the toolbar */
+        .edit-btn,
+        .delete-btn {
+            padding: 3px 6px;
+            font-size: 12px;
+            line-height: 1;
+            background: #fff;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        .edit-btn {
+            color: #1f2937;
+        }
+
+        .edit-btn:hover {
+            background: #f3f4f6;
+        }
+
+        .delete-btn {
+            color: #b91c1c;
+            border-color: #fca5a5;
+        }
+
+        .delete-btn:hover {
+            background: #fee2e2;
+        }
+
+        .delete-btn:focus-visible {
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(239, 68, 68, .25);
+        }
+
+        /* Inline edit form (keep your existing styling) */
+        .edit-row {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-top: 8px;
+            margin-bottom: 14px;
+        }
+
+        .edit-row .field {
+            margin-bottom: 10px;
+        }
+
+        .edit-row .field:last-of-type {
+            margin-bottom: 0;
+        }
+
+        .edit-actions {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            margin-top: 10px;
+        }
+
+        .btn-lite {
+            padding: 6px 10px;
+            border-radius: 8px;
+            border: 1px solid #d1d5db;
+            background: #fff;
+            color: #111;
+            cursor: pointer;
+        }
+
+        .btn-lite:hover {
+            background: #f9fafb;
+        }
+
+        /* Labeled fields in the inline editor */
+        .field {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .field-label {
+            font-size: 12px;
+            line-height: 1.2;
+            color: #4b5563;
+            /* gray-600 */
+            font-weight: 600;
+        }
+
+        /* Pretty "View link" button */
+        .btn-view {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 12px;
+            /* ↑ more internal padding */
+            margin: 10px 0 6px;
+            /* ↑ space around the button */
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            background: #fff;
+            color: #2563eb;
+            font-weight: 600;
+            text-decoration: none;
+            box-shadow: var(--shadow);
+            transition: background .15s ease, border-color .15s ease, box-shadow .15s ease, transform .05s ease;
+        }
+
+
+        .btn-view:hover {
+            background: #eff6ff;
+            border-color: #93c5fd;
+        }
+
+        .btn-view:active {
+            transform: translateY(1px);
+        }
+
+        .btn-view:focus-visible {
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, .3);
+        }
+
+        /* tiny external-arrow */
+        .btn-view::after {
+            content: "↗";
+            font-size: 12px;
+            line-height: 1;
+        }
     </style>
 </head>
 
@@ -423,6 +592,25 @@
             try { localStorage.setItem(LS_KEY, JSON.stringify(map)); } catch { }
         }
 
+        async function deleteMyItem(itemId) {
+            const resp = await fetch(`/api/wishlist/item/${itemId}`, {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token })
+            });
+            const out = await resp.json().catch(() => ({}));
+            if (!resp.ok) throw new Error(out.error || 'Failed to delete');
+        }
+
+        async function updateMyItem(itemId, fields) {
+            const resp = await fetch(`/api/wishlist/item/${itemId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token, ...fields })
+            });
+            const out = await resp.json().catch(() => ({}));
+            if (!resp.ok) throw new Error(out.error || 'Failed to update');
+        }
 
 
         async function addMyItem({ title, url, notes, price, image_url }) {
@@ -441,10 +629,25 @@
             if (!resp.ok) throw new Error(out.error || 'Failed to add');
         }
 
-        // helper near top of <script>
         function fmtDollars(cents) {
             if (cents == null || isNaN(cents) || cents <= 0) return '';
             return `$${(cents / 100).toFixed(0)}`;
+        }
+
+
+        function makeField(id, labelText, controlEl) {
+            const wrap = document.createElement('div'); wrap.className = 'field';
+            const label = document.createElement('label'); label.className = 'field-label'; label.setAttribute('for', id); label.textContent = labelText;
+            controlEl.id = id;
+            wrap.append(label, controlEl);
+            return wrap;
+        }
+
+
+        function toTitleish(s) {
+            if (!s) return '';
+            // Uppercase first letter after start/space/hyphen; preserves apostrophes (won't make Wong'S)
+            return s.toLowerCase().replace(/(^|\s|-)([a-z])/g, (_, sep, c) => sep + c.toUpperCase());
         }
 
 
@@ -469,6 +672,16 @@
             const r = await fetch(`/api/wishlists/all?token=${encodeURIComponent(token)}`);
             const data = await r.json();
             if (!r.ok) { notice.textContent = data.error || 'Failed to load'; return; }
+
+            const rawEvent = data.event?.name || "Wishlists";
+            const eventNamePretty = toTitleish(rawEvent);
+
+            // <title>
+            document.title = `${eventNamePretty} Wishlists`;
+
+            // <h1>
+            const h1 = document.querySelector('h1');
+            if (h1) h1.textContent = `${eventNamePretty} Wishlists`;
 
             // Build: "Budgets are $50 for Gift 1 or $25 for Gift 2"
             const tiers = Array.isArray(data.tiers) ? data.tiers : [];
@@ -497,7 +710,7 @@
             // Greeting outside the box
             const meName = data.me?.name || 'there';
             const eventName = data.event?.name || 'your event';
-            greetEl.textContent = `Hi ${meName}! Welcome :)\n\nPlease submit what you'd like to receive this year at ${eventName}.`;
+            greetEl.textContent = `Hi ${meName}! Welcome :)`;
             greetEl.hidden = false;
 
 
@@ -603,21 +816,132 @@
 
                     right.appendChild(toggle);
 
-
                     // Items
                     items.forEach(it => {
-                        const box = document.createElement('div'); box.className = 'item';
-                        const title = document.createElement('div'); title.style.fontWeight = '600'; title.style.margin = '4px 0'; title.textContent = it.title;
+                        const box = document.createElement('div');
+                        box.className = 'item';
+
+                        // My items: toolbar with Edit + Delete + inline editor
+                        if (owner.id === meId) {
+                            // Floating toolbar
+                            const bar = document.createElement('div');
+                            bar.className = 'item-toolbar';
+                            box.classList.add('has-toolbar');
+
+                            const edit = document.createElement('button');
+                            edit.className = 'edit-btn';
+                            edit.textContent = 'Edit';
+
+                            const del = document.createElement('button');
+                            del.className = 'delete-btn';
+                            del.textContent = 'Delete';
+
+                            bar.append(edit, del);
+                            box.appendChild(bar);
+
+                            // Inline edit form (hidden by default)
+                            // Inline edit form (hidden by default)
+                            const editForm = document.createElement('div');
+                            editForm.className = 'edit-row';
+                            editForm.style.display = 'none';
+
+                            const inTitleE = document.createElement('input'); inTitleE.className = 'input'; inTitleE.placeholder = 'Title *'; inTitleE.value = it.title || '';
+                            const inUrlE = document.createElement('input'); inUrlE.className = 'input'; inUrlE.placeholder = 'Product link (optional)'; inUrlE.value = it.url || '';
+                            const inImgE = document.createElement('input'); inImgE.className = 'input'; inImgE.placeholder = 'Image URL (optional)'; inImgE.value = it.image_url || '';
+                            const inPriceE = document.createElement('input'); inPriceE.className = 'input'; inPriceE.placeholder = 'Gift Price'; inPriceE.value = (it.price_cents != null ? (it.price_cents / 100).toFixed(2) : '');
+                            const inNotesE = document.createElement('textarea'); inNotesE.className = 'input'; inNotesE.rows = 2; inNotesE.placeholder = 'Notes'; inNotesE.value = it.notes || '';
+
+                            const actions = document.createElement('div'); actions.className = 'edit-actions';
+                            const saveBtn = document.createElement('button'); saveBtn.className = 'btn-lite'; saveBtn.textContent = 'Update';
+                            const cancelBtn = document.createElement('button'); cancelBtn.className = 'btn-lite'; cancelBtn.textContent = 'Cancel';
+                            const msg = document.createElement('span'); msg.className = 'muted';
+
+                            actions.append(saveBtn, cancelBtn, msg);
+
+                            // ⬇️ Append labeled fields instead of raw inputs
+                            editForm.append(
+                                makeField(`edt_title_${it.id}`, 'Title *', inTitleE),
+                                makeField(`edt_url_${it.id}`, 'Product link', inUrlE),
+                                makeField(`edt_img_${it.id}`, 'Image URL', inImgE),
+                                makeField(`edt_price_${it.id}`, 'Gift Price', inPriceE),
+                                makeField(`edt_notes_${it.id}`, 'Notes', inNotesE),
+                                actions
+                            );
+                            box.appendChild(editForm);
+
+
+                            // Toggle edit form
+                            edit.onclick = () => {
+                                editForm.style.display = (editForm.style.display === 'none') ? 'block' : 'none';
+                            };
+
+                            // Delete
+                            del.onclick = async () => {
+                                const warn = it.is_reserved
+                                    ? 'This item is currently reserved. Deleting it will remove that reservation.\n\nDelete anyway?'
+                                    : 'Delete this item from your wishlist?';
+                                if (!confirm(warn)) return;
+                                try { await deleteMyItem(it.id); await loadAll(); }
+                                catch (e) { notice.textContent = e.message || 'Could not delete'; }
+                            };
+
+                            // Save update
+                            saveBtn.onclick = async () => {
+                                msg.textContent = '';
+                                if (!inTitleE.value.trim()) { msg.textContent = 'Title required'; return; }
+                                try {
+                                    const price = inPriceE.value.trim();
+                                    const price_cents = price ? Math.round(Number(price.replace(/[$,\s]/g, '')) * 100) : null;
+                                    await updateMyItem(it.id, {
+                                        title: inTitleE.value.trim(),
+                                        url: inUrlE.value.trim() || null,
+                                        image_url: inImgE.value.trim() || null,
+                                        notes: inNotesE.value.trim() || null,
+                                        price_cents: Number.isFinite(price_cents) ? price_cents : null
+                                    });
+                                    msg.textContent = 'Updated!';
+                                    await loadAll();
+                                } catch (e) {
+                                    msg.textContent = e.message || 'Failed';
+                                }
+                            };
+
+                            cancelBtn.onclick = () => { editForm.style.display = 'none'; };
+                        }
+
+                        // Display content
+                        const title = document.createElement('div');
+                        title.style.fontWeight = '600';
+                        title.style.margin = '4px 0';
+                        title.textContent = it.title;
                         box.appendChild(title);
-                        if (it.image_url) { const img = document.createElement('img'); img.src = it.image_url; img.alt = it.title; box.appendChild(img); }
-                        if (it.url) { const a = document.createElement('a'); a.href = it.url; a.target = '_blank'; a.rel = 'noopener'; a.textContent = 'View link'; box.appendChild(a); }
-                        if (it.notes) { const notes = document.createElement('div'); notes.textContent = it.notes; box.appendChild(notes); }
-                        if (it.price_cents != null) { const pr = document.createElement('div'); pr.className = 'muted'; pr.textContent = fmtPrice(it.price_cents); box.appendChild(pr); }
+
+                        if (it.image_url) {
+                            const img = document.createElement('img');
+                            img.src = it.image_url; img.alt = it.title;
+                            box.appendChild(img);
+                        }
+                        if (it.url) {
+                            const a = document.createElement('a');
+                            a.href = it.url;
+                            a.target = '_blank';
+                            a.rel = 'noopener noreferrer';
+                            a.textContent = 'View link';
+                            a.className = 'btn-view';          // 👈 make it pretty
+                            box.appendChild(a);
+                        }
+
+                        if (it.notes) {
+                            const notes = document.createElement('div'); notes.textContent = it.notes; box.appendChild(notes);
+                        }
+                        if (it.price_cents != null) {
+                            const pr = document.createElement('div'); pr.className = 'muted'; pr.textContent = fmtPrice(it.price_cents); box.appendChild(pr);
+                        }
 
                         const row = document.createElement('div'); row.className = 'row';
-                        const canAct = allowed.has(owner.id) && owner.id !== meId; // assigned & not your own
+                        const canAct = allowed.has(owner.id) && owner.id !== meId;       // assigned & not your own
                         const canReserve = canAct && !it.is_reserved;
-                        const canUnreserve = !!it.reserved_by_me;                  // only the reserver sees Unreserve
+                        const canUnreserve = !!it.reserved_by_me;                         // only the reserver sees Unreserve
 
                         if (it.is_reserved) {
                             const reserved = document.createElement('span'); reserved.className = 'pill green'; reserved.textContent = 'Reserved';
@@ -636,6 +960,7 @@
                         box.appendChild(row);
                         panel.appendChild(box);
                     });
+
 
                 } else {
                     // No items: just header + empty state (still track collapsed state)
