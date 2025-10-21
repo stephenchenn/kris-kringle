@@ -243,6 +243,14 @@ function escapeHtml(s) {
     .replace(/'/g, "&#39;");
 }
 
+function publicBaseUrl(req) {
+  const proto = req.get('x-forwarded-proto');
+  const host  = req.get('x-forwarded-host');
+  if (proto && host) return `${proto}://${host}`;
+  return process.env.BASE_URL || "http://localhost:3000";
+}
+
+
 
 // --- API: who am I + recipients ---
 // GET /api/me
@@ -568,6 +576,70 @@ app.post("/api/admin/send-invites", async (req, res) => {
 
   res.json({ ok: true, sent, failed });
 });
+
+app.post("/api/admin/send-wishlists", async (req, res) => {
+  const { secret, eventId } = req.body || {};
+  if (secret !== process.env.ADMIN_SECRET) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+
+  // Use provided event or the most-recent one
+  const evt =
+    eventId ||
+    db.prepare(`SELECT id FROM events ORDER BY created_at DESC LIMIT 1`).get()?.id;
+
+  if (!evt) return res.status(404).json({ error: "No event found" });
+
+  const eventRow = db
+    .prepare(`SELECT id, name FROM events WHERE id = ?`)
+    .get(evt);
+
+  const base = publicBaseUrl(req); // or: (process.env.BASE_URL || "http://localhost:3000")
+
+  const people = db
+    .prepare(`SELECT name, email, invite_token FROM participants WHERE event_id = ?`)
+    .all(evt);
+
+  const send = (to, subject, html) =>
+    transporter.sendMail({ from: process.env.FROM_EMAIL, to, subject, html });
+
+  let sent = 0;
+  const failed = [];
+
+  for (const p of people) {
+    const wl = `${base}/wishlists?token=${encodeURIComponent(p.invite_token)}`; // route that serves wishlists.html
+
+    const html = `
+      <div style="font-family:Arial,Helvetica,sans-serif;font-size:16px;color:#111">
+        <p>Hi ${escapeHtml(p.name)},</p>
+        <p>Your wishlist page for <b>${escapeHtml(eventRow.name)}</b> is ready.</p>
+        <p>
+          Add items you'd like to receive and <b>anonymously reserve</b> items on others' lists so no one buys duplicates.
+        </p>
+        <p>
+          Open your wishlist here:<br>
+          <a href="${wl}" target="_blank" rel="noopener" style="color:#2563eb">${wl}</a>
+        </p>
+        <p style="color:#6b7280;font-size:14px">
+          This link is authenticated by your invite token.
+          <b>Do not share it with others.</b>
+        </p>
+        <p>Happy gifting! 🎁</p>
+      </div>
+    `;
+
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      await send(p.email, `Wishlists: ${eventRow.name}`, html);
+      sent++;
+    } catch (e) {
+      failed.push({ email: p.email, error: e.message });
+    }
+  }
+
+  return res.json({ ok: true, sent, failed });
+});
+
 
 app.post("/api/resend", async (req, res) => {
   const { token } = req.body || {};

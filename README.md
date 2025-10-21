@@ -7,7 +7,7 @@ curl -X POST http://localhost:3000/api/admin/seed \
   -H "Content-Type: application/json" \
   -d @- <<'JSON'
 {
-  "secret": "w1XbhgtyTsnO2diewxDdRm3sM3HZFYqck6i-W1fSjPg",
+  "secret": "admin-secret",
   "eventName": "Wong's Christmas 2025",
   "participants": [
     {"name":"stephen1","email":"chen.stephen151@gmail.com"},
@@ -25,7 +25,12 @@ JSON
 2. Send invites to participants:
 curl -X POST http://localhost:3000/api/admin/send-invites \
   -H "Content-Type: application/json" \
-  -d '{"secret":"<ADMIN_SECRET>","eventId":"7e0669d4-386d-473f-be58-c3261df58388"}'
+  -d '{"secret":"admin-secret","eventId":"7e0669d4-386d-473f-be58-c3261df58388"}'
+  
+3. Send wishlists to participants:
+curl -X POST http://localhost:3000/api/admin/send-wishlists \
+  -H "Content-Type: application/json" \
+  -d '{"secret":"admin-secret","eventId":"9c2e7285-9639-4f0c-81cc-866aafa58bc4"}'
 ______________________________________________________________________________________________________________________________________________________________________________
 
 3. Each Recipients do the draw:
@@ -113,3 +118,17 @@ sqlite3 /data/db.sqlite ".backup '/tmp/kk-backup.sqlite'"
 
 # open the snapshot
 sqlite3 /tmp/kk-backup.sqlite
+
+
+
+
+.ENV
+PORT=3000
+ADMIN_SECRET=<ADMIN-SECRET>
+BASE_URL= https://kris-kringle.onrender.com
+DB_PATH=/data/db.sqlite
+SMTP_HOST=smtp.sendgrid.net
+SMTP_PORT=587
+SMTP_USER=apikey
+SMTP_PASS=<SENDGRID-API-KEY>
+FROM_EMAIL="Wong's Kris Kringle <noreply@mail.wongskringle.online>"
