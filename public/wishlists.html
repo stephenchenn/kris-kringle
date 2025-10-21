@@ -67,8 +67,8 @@
             /* ← prevent row mates from stretching */
             align-content: start;
             /* extra safety for some browsers */
+            padding-bottom: 16px;
         }
-
 
         .card {
             border: 1px solid #e5e7eb;
@@ -513,12 +513,23 @@
             font-size: 12px;
             line-height: 1;
         }
+
+        /* Respect iOS/Android bottom bars so last panel isn't obscured */
+        :root {
+            --safe-bottom: env(safe-area-inset-bottom, 0px);
+        }
+
+        body {
+            padding-bottom: calc(var(--safe-bottom) + 32px);
+            /* extra room at the bottom */
+        }
     </style>
 </head>
 
 <body>
     <h1>Wong's Kris Kringle Wishlists</h1>
-    <div class="muted">Authenticated by your invite token.You can reserve items anonymously so no one buys duplicates. Please only reserve items you intend to purchase.<br><br>Don't share this link with others!</div>
+    <div class="muted">Authenticated by your invite token.You can reserve items anonymously so no one buys duplicates.
+        Please only reserve items you intend to purchase.<br><br>Don't share this link with others!</div>
     </div>
 
     <!-- Greeting OUTSIDE the add box -->

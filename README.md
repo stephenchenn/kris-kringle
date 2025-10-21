@@ -12,8 +12,7 @@ curl -X POST http://localhost:3000/api/admin/seed \
   "participants": [
     {"name":"stephen1","email":"chen.stephen151@gmail.com"},
     {"name":"Liezel","email":"liezel@example.com"},
-    {"name":"Clarisse","email":"clarisse@example.com"},
-    {"name":"Hana","email":"hana@example.com"}
+    {"name":"Clarisse","email":"clarisse@example.com"}
   ],
   "tiers": [
     { "name": "Gift 1", "budgetCents": 10000 },
@@ -30,7 +29,7 @@ curl -X POST http://localhost:3000/api/admin/send-invites \
 3. Send wishlists to participants:
 curl -X POST http://localhost:3000/api/admin/send-wishlists \
   -H "Content-Type: application/json" \
-  -d '{"secret":"admin-secret","eventId":"9c2e7285-9639-4f0c-81cc-866aafa58bc4"}'
+  -d '{"secret":"admin-secret","eventId":"3b92880f-1457-4243-a008-60fe58f833aa"}'
 ______________________________________________________________________________________________________________________________________________________________________________
 
 3. Each Recipients do the draw:
@@ -84,6 +83,7 @@ To Do:
 4. Deploy ✅
 5. Test ✅
 6. Add budget to gifts and ensure each person gives and receives a gift of each budget (e.g. 2 gifts, one budget $50 and one budget $100) ✅
+7. Wishlist ✅
 
 Future Actions
 - Godaddy domain wongskringle.online expires on 15 Oct, 2026 (Auto-renew turned off)
@@ -113,8 +113,14 @@ https://render.com/docs/ssh
 # Enter SSH
 render ssh
 
+# merge recent changes to main db
+sqlite3 /data/db.sqlite "PRAGMA wal_checkpoint(FULL);"
+
 # backup first (if you haven’t already)
 sqlite3 /data/db.sqlite ".backup '/tmp/kk-backup.sqlite'"
+
+# Check backup
+ls -lh /tmp/kk-backup.sqlite
 
 # open the snapshot
 sqlite3 /tmp/kk-backup.sqlite
@@ -132,3 +138,17 @@ SMTP_PORT=587
 SMTP_USER=apikey
 SMTP_PASS=<SENDGRID-API-KEY>
 FROM_EMAIL="Wong's Kris Kringle <noreply@mail.wongskringle.online>"
+
+
+DEPLOY
+Name: kris-kringle
+Source Code: stephenchenn/kris-kringle
+Build Command: npm ci
+Start Command: node server.js
+Branch: main
+Region: Singapore
+Instance: Starter
+Disk Mount Path: /data
+Disk Size: 1GB
+Health Check Path: /healthz
+Auto-Deploy: On Commit

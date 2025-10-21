@@ -245,7 +245,7 @@ function escapeHtml(s) {
 
 function publicBaseUrl(req) {
   const proto = req.get('x-forwarded-proto');
-  const host  = req.get('x-forwarded-host');
+  const host = req.get('x-forwarded-host');
   if (proto && host) return `${proto}://${host}`;
   return process.env.BASE_URL || "http://localhost:3000";
 }
@@ -372,15 +372,15 @@ app.post("/api/draw", async (req, res) => {
       // continue — we can still return recipients
     }
 
-  // send email using centralized helper (fire-and-forget)
-  sendAssignmentEmail({
-    to: meRow.email,
-    participantName: meRow.name,
-    eventName: meRow.event_name,
-    recipients_by_tier,
-    // replyTo: "Your Name <you@yourdomain.com>", // optional
-  })
-    .catch((e) => console.error("Email error:", e && e.message ? e.message : e));
+    // send email using centralized helper (fire-and-forget)
+    sendAssignmentEmail({
+      to: meRow.email,
+      participantName: meRow.name,
+      eventName: meRow.event_name,
+      recipients_by_tier,
+      // replyTo: "Your Name <you@yourdomain.com>", // optional
+    })
+      .catch((e) => console.error("Email error:", e && e.message ? e.message : e));
 
   }
 
@@ -600,37 +600,71 @@ app.post("/api/admin/send-wishlists", async (req, res) => {
     .prepare(`SELECT name, email, invite_token FROM participants WHERE event_id = ?`)
     .all(evt);
 
-  const send = (to, subject, html) =>
-    transporter.sendMail({ from: process.env.FROM_EMAIL, to, subject, html });
+  // gently paced transporter helps too
+  const transporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST,
+    port: Number(process.env.SMTP_PORT || 587),
+    secure: Number(process.env.SMTP_PORT) === 465,
+    auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+    pool: true,
+    maxConnections: 2,
+    maxMessages: 50,
+    rateLimit: 10,   // <= 10 msgs/sec
+    rateDelta: 1000
+  });
+
+  function buildWishlistEmail({ personName, eventName, link }) {
+    const subject = `Your wishlist link for ${eventName}`;
+
+    // PLAIN TEXT (important)
+    const text = [
+      `Hi ${personName},`,
+      ``,
+      `Your wishlist page for ${eventName} is ready.`,
+      `Open your personal link: ${link}`,
+      ``,
+      `This link is authenticated by your invite token. Do not share it.`,
+      ``,
+      `Thanks!`
+    ].join('\n');
+
+    // MINIMAL HTML (one link, no emojis, minimal styling)
+    const html =
+      `<div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:16px;color:#111">` +
+      `<p>Hi ${escapeHtml(personName)},</p>` +
+      `<p>Your wishlist page for ${escapeHtml(eventName)} is ready.</p>` +
+      `<p><a href="${link}" rel="noopener">Open your personal link</a></p>` +
+      `<p style="color:#6b7280;font-size:14px">This link is authenticated by your invite token. Do not share it.</p>` +
+      `<p>Thanks!</p>` +
+      `</div>`;
+
+    return { subject, text, html };
+  }
+
+  async function sendWishlist({ to, subject, text, html }) {
+    return transporter.sendMail({
+      from: process.env.FROM_EMAIL,                    // e.g. "Wong's Kris Kringle <noreply@mail.wongskringle.online>"
+      to,
+      subject,
+      text,    // 👈 include text
+      html,
+      // If your ESP supports per-message tracking flags, disable them:
+      // headers: { 'X-MJ-TrackOpen': '0', 'X-MJ-TrackClick': '0' } // (Mailjet SMTP header names vary; use dashboard if unsure)
+    });
+  }
+
 
   let sent = 0;
   const failed = [];
 
   for (const p of people) {
-    const wl = `${base}/wishlists?token=${encodeURIComponent(p.invite_token)}`; // route that serves wishlists.html
-
-    const html = `
-      <div style="font-family:Arial,Helvetica,sans-serif;font-size:16px;color:#111">
-        <p>Hi ${escapeHtml(p.name)},</p>
-        <p>Your wishlist page for <b>${escapeHtml(eventRow.name)}</b> is ready.</p>
-        <p>
-          Add items you'd like to receive and <b>anonymously reserve</b> items on others' lists so no one buys duplicates.
-        </p>
-        <p>
-          Open your wishlist here:<br>
-          <a href="${wl}" target="_blank" rel="noopener" style="color:#2563eb">${wl}</a>
-        </p>
-        <p style="color:#6b7280;font-size:14px">
-          This link is authenticated by your invite token.
-          <b>Do not share it with others.</b>
-        </p>
-        <p>Happy gifting! 🎁</p>
-      </div>
-    `;
+    const wl = `${base}/wishlists?token=${encodeURIComponent(p.invite_token)}`;
+    const { subject, text, html } = buildWishlistEmail({
+      personName: p.name, eventName: eventRow.name, link: wl
+    });
 
     try {
-      // eslint-disable-next-line no-await-in-loop
-      await send(p.email, `Wishlists: ${eventRow.name}`, html);
+      await sendWishlist({ to: p.email, subject, text, html });
       sent++;
     } catch (e) {
       failed.push({ email: p.email, error: e.message });
@@ -936,10 +970,6 @@ app.post("/api/admin/reset", (req, res) => {
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
-});
-
-app.get('/wishlist', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'wishlist.html'));
 });
 
 app.get('/wishlists', (req, res) => {
