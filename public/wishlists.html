@@ -1,0 +1,990 @@
+<!doctype html>
+<html>
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Kris Kringle Wishlists</title>
+    <style>
+        /* ===== Pastel background (choose one) ===== */
+        :root {
+            /* Soft lavender */
+            --page-bg: #f6f3ff;
+            /* Alt ideas:
+                --page-bg: #fef7fb;   // blush pink
+                --page-bg: #f3fbff;   // powder blue
+                --page-bg: #f5fff7;   // mint
+            */
+            --card-bg: #ffffff;
+            --card-border: #e5e7eb;
+            --shadow: 0 1px 2px rgba(16, 24, 40, .06), 0 1px 1px rgba(16, 24, 40, .04);
+        }
+
+        html,
+        body {
+            background: var(--page-bg);
+        }
+
+        /* Keep content readable on the pastel */
+        body {
+            backdrop-filter: saturate(1.05);
+        }
+
+        /* Make cards pop a bit against the pastel */
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            box-shadow: var(--shadow);
+        }
+
+        /* Optional: soften the add form box too */
+        .add-wrap,
+        .greeting {
+            background: #fff;
+            box-shadow: var(--shadow);
+        }
+
+
+        body {
+            font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+            margin: 24px;
+        }
+
+        h1 {
+            margin-bottom: 8px;
+        }
+
+        .muted {
+            color: #6b7280;
+            font-size: 14px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 16px;
+            align-items: start;
+            /* ← prevent row mates from stretching */
+            align-content: start;
+            /* extra safety for some browsers */
+            padding-bottom: 16px;
+        }
+
+        .card {
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        /* Header alignment fix */
+        .card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .card-header .left {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            min-width: 0;
+        }
+
+        .card-header .right {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+
+        .owner {
+            font-weight: 600;
+            margin: 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .item {
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            padding: 10px;
+            margin: 8px 0;
+        }
+
+        .row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        button {
+            padding: 6px 10px;
+            border-radius: 8px;
+            border: 1px solid #d1d5db;
+            background: #111;
+            color: #fff;
+            cursor: pointer;
+        }
+
+        button[disabled] {
+            opacity: .5;
+            cursor: not-allowed;
+        }
+
+        img {
+            max-width: 100%;
+            border-radius: 8px;
+            display: block;
+            margin: 6px 0;
+        }
+
+        a {
+            color: #2563eb;
+            text-decoration: none;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
+
+        .pill {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 9999px;
+            font-size: 12px;
+        }
+
+        .pill.green {
+            background: #ecfdf5;
+            color: #065f46;
+            border: 1px solid #a7f3d0;
+        }
+
+        .pill.gray {
+            background: #f3f4f6;
+            color: #374151;
+            border: 1px solid #e5e7eb;
+        }
+
+        /* collapse */
+        .collapse {
+            overflow: hidden;
+            transition: max-height 0.25s ease;
+        }
+
+        .collapse.collapsed {
+            max-height: 0;
+        }
+
+        .collapse.expanded {
+            max-height: 2000px;
+        }
+
+        .btn-link {
+            background: transparent;
+            color: #2563eb;
+            border: none;
+            padding: 0;
+            cursor: pointer;
+        }
+
+        /* Top form */
+        .add-wrap {
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 12px;
+            margin: 16px 0;
+        }
+
+        .greeting {
+            font-size: 16px;
+            margin: 6px 0 12px;
+        }
+
+        .input,
+        textarea.input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            max-width: 100%;
+            box-sizing: border-box;
+
+        }
+
+        .input-row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin: 8px 0;
+        }
+
+        .input-row .half {
+            flex: 1 1 220px;
+        }
+
+        .input-row .full {
+            flex: 1 1 100%;
+        }
+
+        .greeting {
+            font-size: 18px;
+            /* larger */
+            line-height: 1.5;
+            font-weight: 600;
+            /* semi-bold */
+            margin: 20px 0 16px;
+            /* more space above/below */
+            padding: 12px 14px;
+            /* comfy padding */
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            background: #fafaf9;
+            /* subtle warm tint */
+            white-space: pre-line;
+        }
+
+        @media (min-width: 768px) {
+            .greeting {
+                font-size: 20px;
+                margin: 24px 0 18px;
+                padding: 14px 16px;
+            }
+        }
+
+        .form-title {
+            font-weight: 600;
+            margin: 4px 0 10px;
+        }
+
+        /* Toggle button */
+        /* Compact toggle pill */
+        .btn-toggle {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            border: 1px solid #e5e7eb;
+            background: #fff;
+            padding: 4px 8px;
+            border-radius: 9999px;
+            cursor: pointer;
+            font-weight: 500;
+            font-size: 13px;
+            line-height: 1;
+            /* tighter line height */
+            color: #374151;
+            transition: background .15s ease, border-color .15s ease, box-shadow .15s ease;
+        }
+
+        .btn-toggle:hover {
+            background: #f9fafb;
+            border-color: #d1d5db;
+        }
+
+        .btn-toggle:focus-visible {
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, .35);
+        }
+
+        /* Smaller, better-aligned chevron */
+        .chev {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            /* smaller */
+            border-right: 1.75px solid currentColor;
+            border-bottom: 1.75px solid currentColor;
+            transform: rotate(-45deg);
+            /* ▶ collapsed */
+            transform-origin: 50% 50%;
+            margin-right: 0;
+            /* no extra gap */
+            position: relative;
+            top: 0.5px;
+            /* nudges baseline alignment */
+        }
+
+        .chev.expanded {
+            transform: rotate(45deg);
+        }
+
+        /* ▼ expanded */
+
+        /* Smaller badge so the pill feels balanced */
+        .badge {
+            display: inline-block;
+            min-width: 18px;
+            padding: 2px 6px;
+            font-size: 11px;
+            line-height: 1;
+            text-align: center;
+            border-radius: 9999px;
+            background: #f3f4f6;
+            color: #374151;
+            border: 1px solid #e5e7eb;
+        }
+
+        /* Respect prefers-reduced-motion */
+        @media (prefers-reduced-motion: reduce) {
+            .chev {
+                transition: none;
+            }
+
+            .btn-toggle {
+                transition: none;
+            }
+        }
+
+        /* Constrain layout on desktop and center it */
+        @media (min-width: 1024px) {
+            body {
+                max-width: 1100px;
+                /* tweak to taste: 960–1200px works well */
+                margin: 24px auto;
+                /* centers the page */
+                padding: 0 12px;
+                /* a little side breathing room */
+            }
+        }
+
+        /* Put delete button in the item’s top-right */
+        /* Item container */
+        .item {
+            position: relative;
+        }
+
+        /* Floating toolbar that holds Edit + Delete */
+        .item-toolbar {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            display: flex;
+            gap: 6px;
+            background: #fff;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 4px 6px;
+            box-shadow: var(--shadow);
+            z-index: 2;
+        }
+
+        /* Give room so title/image don’t sit under the toolbar */
+        .item.has-toolbar {
+            padding-top: 56px;
+        }
+
+        @media (min-width: 640px) {
+            .item.has-toolbar {
+                padding-top: 48px;
+            }
+
+            /* a bit tighter on wider screens */
+        }
+
+        /* Buttons inside the toolbar */
+        .edit-btn,
+        .delete-btn {
+            padding: 3px 6px;
+            font-size: 12px;
+            line-height: 1;
+            background: #fff;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        .edit-btn {
+            color: #1f2937;
+        }
+
+        .edit-btn:hover {
+            background: #f3f4f6;
+        }
+
+        .delete-btn {
+            color: #b91c1c;
+            border-color: #fca5a5;
+        }
+
+        .delete-btn:hover {
+            background: #fee2e2;
+        }
+
+        .delete-btn:focus-visible {
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(239, 68, 68, .25);
+        }
+
+        /* Inline edit form (keep your existing styling) */
+        .edit-row {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-top: 8px;
+            margin-bottom: 14px;
+        }
+
+        .edit-row .field {
+            margin-bottom: 10px;
+        }
+
+        .edit-row .field:last-of-type {
+            margin-bottom: 0;
+        }
+
+        .edit-actions {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            margin-top: 10px;
+        }
+
+        .btn-lite {
+            padding: 6px 10px;
+            border-radius: 8px;
+            border: 1px solid #d1d5db;
+            background: #fff;
+            color: #111;
+            cursor: pointer;
+        }
+
+        .btn-lite:hover {
+            background: #f9fafb;
+        }
+
+        /* Labeled fields in the inline editor */
+        .field {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .field-label {
+            font-size: 12px;
+            line-height: 1.2;
+            color: #4b5563;
+            /* gray-600 */
+            font-weight: 600;
+        }
+
+        /* Pretty "View link" button */
+        .btn-view {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 12px;
+            /* ↑ more internal padding */
+            margin: 10px 0 6px;
+            /* ↑ space around the button */
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            background: #fff;
+            color: #2563eb;
+            font-weight: 600;
+            text-decoration: none;
+            box-shadow: var(--shadow);
+            transition: background .15s ease, border-color .15s ease, box-shadow .15s ease, transform .05s ease;
+        }
+
+
+        .btn-view:hover {
+            background: #eff6ff;
+            border-color: #93c5fd;
+        }
+
+        .btn-view:active {
+            transform: translateY(1px);
+        }
+
+        .btn-view:focus-visible {
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, .3);
+        }
+
+        /* tiny external-arrow */
+        .btn-view::after {
+            content: "↗";
+            font-size: 12px;
+            line-height: 1;
+        }
+
+        /* Respect iOS/Android bottom bars so last panel isn't obscured */
+        :root {
+            --safe-bottom: env(safe-area-inset-bottom, 0px);
+        }
+
+        body {
+            padding-bottom: calc(var(--safe-bottom) + 32px);
+            /* extra room at the bottom */
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Wong's Kris Kringle Wishlists</h1>
+    <div class="muted">Authenticated by your invite token.You can reserve items anonymously so no one buys duplicates.
+        Please only reserve items you intend to purchase.<br><br>Don't share this link with others!</div>
+    </div>
+
+    <!-- Greeting OUTSIDE the add box -->
+    <p id="greeting" class="greeting" hidden></p>
+
+    <!-- Global add form -->
+    <div id="addForm" class="add-wrap" hidden>
+        <div class="form-title">I’d like to receive:</div>
+        <div class="input-row">
+            <input id="f_title" class="input full" placeholder="Title *" />
+        </div>
+        <div class="input-row">
+            <input id="f_url" class="input half" placeholder="Product link (optional)" />
+            <input id="f_price" class="input half" placeholder="Target price (e.g. 49.99)" />
+        </div>
+        <div class="input-row">
+            <input id="f_image" class="input half" placeholder="Image URL (optional)" />
+            <textarea id="f_notes" class="input half input" rows="2" placeholder="Notes (size, color, etc.)"></textarea>
+        </div>
+        <div class="row">
+            <button id="btn_add">Add to my wishlist</button>
+            <span id="msg_add" class="muted"></span>
+        </div>
+    </div>
+
+
+    <div id="notice" class="muted" style="margin:10px 0;"></div>
+    <div id="root" class="grid"></div>
+
+    <script>
+        const qs = new URLSearchParams(location.search);
+        const token = qs.get('token');
+        if (!token) { document.body.innerHTML = '<p class="muted">Missing token</p>'; throw new Error('missing token'); }
+
+        const root = document.getElementById('root');
+        const notice = document.getElementById('notice');
+
+        // Top form elements
+        const addWrap = document.getElementById('addForm');
+        const greetEl = document.getElementById('greeting');
+        const inTitle = document.getElementById('f_title');
+        const inUrl = document.getElementById('f_url');
+        const inPrice = document.getElementById('f_price');
+        const inImage = document.getElementById('f_image');
+        const inNotes = document.getElementById('f_notes');
+        const btnAdd = document.getElementById('btn_add');
+        const msgAdd = document.getElementById('msg_add');
+
+        function fmtPrice(cents) { return (cents == null || isNaN(cents)) ? '' : `$${(cents / 100).toFixed(2)}`; }
+        function centsFromPrice(p) {
+            if (!p) return null;
+            const n = Number(String(p).replace(/[$,\\s]/g, ''));
+            return Number.isFinite(n) ? Math.round(n * 100) : null;
+        }
+
+        function fmtWholeDollars(cents) {
+            if (cents == null || isNaN(cents)) return null;
+            return `$${(cents / 100).toFixed(0)}`;
+        }
+        function joinWithOr(parts) {
+            if (parts.length <= 1) return parts.join('');
+            if (parts.length === 2) return parts.join(' or ');
+            return parts.slice(0, -1).join(', ') + ' or ' + parts.slice(-1);
+        }
+
+        const LS_KEY = 'kk_wl_collapsed_v1'; // { [ownerId]: true|false }  true = collapsed
+        function loadCollapsedMap() {
+            try { return JSON.parse(localStorage.getItem(LS_KEY) || '{}'); } catch { return {}; }
+        }
+        function saveCollapsedMap(map) {
+            try { localStorage.setItem(LS_KEY, JSON.stringify(map)); } catch { }
+        }
+
+        async function deleteMyItem(itemId) {
+            const resp = await fetch(`/api/wishlist/item/${itemId}`, {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token })
+            });
+            const out = await resp.json().catch(() => ({}));
+            if (!resp.ok) throw new Error(out.error || 'Failed to delete');
+        }
+
+        async function updateMyItem(itemId, fields) {
+            const resp = await fetch(`/api/wishlist/item/${itemId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token, ...fields })
+            });
+            const out = await resp.json().catch(() => ({}));
+            if (!resp.ok) throw new Error(out.error || 'Failed to update');
+        }
+
+
+        async function addMyItem({ title, url, notes, price, image_url }) {
+            const resp = await fetch('/api/wishlist/item', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    token,
+                    title: (title || '').trim(),
+                    url: (url || '').trim() || null,
+                    notes: (notes || '').trim() || null,
+                    price_cents: centsFromPrice(price),
+                    image_url: (image_url || '').trim() || null
+                })
+            });
+            const out = await resp.json().catch(() => ({}));
+            if (!resp.ok) throw new Error(out.error || 'Failed to add');
+        }
+
+        function fmtDollars(cents) {
+            if (cents == null || isNaN(cents) || cents <= 0) return '';
+            return `$${(cents / 100).toFixed(0)}`;
+        }
+
+
+        function makeField(id, labelText, controlEl) {
+            const wrap = document.createElement('div'); wrap.className = 'field';
+            const label = document.createElement('label'); label.className = 'field-label'; label.setAttribute('for', id); label.textContent = labelText;
+            controlEl.id = id;
+            wrap.append(label, controlEl);
+            return wrap;
+        }
+
+
+        function toTitleish(s) {
+            if (!s) return '';
+            // Uppercase first letter after start/space/hyphen; preserves apostrophes (won't make Wong'S)
+            return s.toLowerCase().replace(/(^|\s|-)([a-z])/g, (_, sep, c) => sep + c.toUpperCase());
+        }
+
+
+        btnAdd?.addEventListener('click', async () => {
+            msgAdd.textContent = '';
+            try {
+                if (!inTitle.value.trim()) { msgAdd.textContent = 'Title required'; return; }
+                await addMyItem({
+                    title: inTitle.value,
+                    url: inUrl.value,
+                    notes: inNotes.value,
+                    price: inPrice.value,
+                    image_url: inImage.value
+                });
+                inTitle.value = inUrl.value = inNotes.value = inPrice.value = inImage.value = '';
+                msgAdd.textContent = 'Added!';
+                await loadAll();
+            } catch (e) { msgAdd.textContent = e.message || 'Failed'; }
+        });
+
+        async function loadAll() {
+            const r = await fetch(`/api/wishlists/all?token=${encodeURIComponent(token)}`);
+            const data = await r.json();
+            if (!r.ok) { notice.textContent = data.error || 'Failed to load'; return; }
+
+            const rawEvent = data.event?.name || "Wishlists";
+            const eventNamePretty = toTitleish(rawEvent);
+
+            // <title>
+            document.title = `${eventNamePretty} Wishlists`;
+
+            // <h1>
+            const h1 = document.querySelector('h1');
+            if (h1) h1.textContent = `${eventNamePretty} Wishlists`;
+
+            // Build: "Budgets are $50 for Gift 1 or $25 for Gift 2"
+            const tiers = Array.isArray(data.tiers) ? data.tiers : [];
+            const pieces = tiers.map(t => {
+                const b = fmtWholeDollars(t.budget_cents);
+                return b ? `${b} for ${t.name}` : null;
+            }).filter(Boolean);
+
+            if (pieces.length > 0) {
+                const budgetsText = joinWithOr(pieces);
+                inPrice.placeholder = `Gift Price (Budgets are ${budgetsText})`;
+                inPrice.title = `Budgets are ${budgetsText}`;
+            } else if (tiers.length > 0) {
+                // No budgets set, just show tier names
+                const names = joinWithOr(tiers.map(t => t.name));
+                inPrice.placeholder = `Gift Price (${names})`;
+                inPrice.title = names;
+            } else {
+                // Fallback
+                inPrice.placeholder = 'Gift Price (e.g. 49.99)';
+                inPrice.title = '';
+            }
+
+
+
+            // Greeting outside the box
+            const meName = data.me?.name || 'there';
+            const eventName = data.event?.name || 'your event';
+            greetEl.textContent = `Hi ${meName}! Welcome :)`;
+            greetEl.hidden = false;
+
+
+            // Show the add box
+            addWrap.hidden = false;
+
+            renderAll(data);
+        }
+
+
+        async function reserve(itemId) {
+            const r = await fetch(`/api/wishlist/item/${itemId}/reserve`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token })
+            });
+            const out = await r.json().catch(() => ({}));
+            if (!r.ok) notice.textContent = out.error || 'Could not reserve';
+            await loadAll();
+        }
+
+        async function unreserve(itemId) {
+            const r = await fetch(`/api/wishlist/item/${itemId}/unreserve`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token })
+            });
+            const out = await r.json().catch(() => ({}));
+            if (!r.ok) notice.textContent = out.error || 'Could not unreserve';
+            await loadAll();
+        }
+
+        function renderAll(data) {
+            root.innerHTML = '';
+            const meId = data.me?.id;
+            const allowed = new Set(data.allowed_owner_ids || []);
+            const collapsedMap = loadCollapsedMap(); // 👈 load saved states
+
+            data.wishlists.forEach(({ owner, items }) => {
+                const card = document.createElement('div'); card.className = 'card';
+
+                // Header with name/pill on left, collapse on right
+                const header = document.createElement('div'); header.className = 'card-header';
+                const left = document.createElement('div'); left.className = 'left';
+                const nameEl = document.createElement('div'); nameEl.className = 'owner'; nameEl.textContent = owner.name;
+                left.appendChild(nameEl);
+                if (owner.id === meId) {
+                    const pill = document.createElement('span'); pill.className = 'pill gray'; pill.textContent = 'you';
+                    left.appendChild(pill);
+                }
+                const right = document.createElement('div'); right.className = 'right';
+                const count = (items && items.length) || 0;
+                const sectionId = `wl-${owner.id}`;
+
+                header.append(left, right);
+                card.appendChild(header);
+
+                // Items panel — default collapsed; use saved state if present
+                const panel = document.createElement('div');
+                panel.id = sectionId;
+                const wasCollapsed = (collapsedMap[owner.id] !== undefined) ? !!collapsedMap[owner.id] : true; // 👈 default collapsed
+                panel.className = `collapse ${wasCollapsed ? 'collapsed' : 'expanded'}`;
+                card.appendChild(panel);
+
+                if (count > 0) {
+                    const sectionId = `wl-${owner.id}`;
+                    const wasCollapsed = (collapsedMap?.[owner.id] !== undefined) ? !!collapsedMap[owner.id] : true;
+
+                    // Toggle button UI
+                    const toggle = document.createElement('button');
+                    toggle.type = 'button';
+                    toggle.className = 'btn-toggle';
+                    toggle.setAttribute('aria-controls', sectionId);
+                    toggle.setAttribute('aria-expanded', String(!wasCollapsed));
+
+                    // Build inner content: chevron + label + badge
+                    const chev = document.createElement('span');
+                    chev.className = 'chev' + (wasCollapsed ? '' : ' expanded');
+
+                    const label = document.createElement('span');
+                    label.textContent = wasCollapsed ? 'Expand' : 'Collapse';
+
+                    const badge = document.createElement('span');
+                    badge.className = 'badge';
+                    badge.textContent = String(count);
+
+                    toggle.append(chev, label, badge);
+
+                    // Toggle behavior
+                    toggle.onclick = () => {
+                        const nowCollapsed = panel.classList.contains('expanded'); // we’ll flip
+                        panel.classList.toggle('expanded', !nowCollapsed);
+                        panel.classList.toggle('collapsed', nowCollapsed);
+
+                        // save new state
+                        const map = loadCollapsedMap();
+                        map[owner.id] = nowCollapsed;
+                        saveCollapsedMap(map);
+
+                        // update UI
+                        toggle.setAttribute('aria-expanded', String(!nowCollapsed));
+                        label.textContent = (!nowCollapsed) ? 'Collapse' : 'Expand';
+                        chev.classList.toggle('expanded', !nowCollapsed);
+                    };
+
+                    right.appendChild(toggle);
+
+                    // Items
+                    items.forEach(it => {
+                        const box = document.createElement('div');
+                        box.className = 'item';
+
+                        // My items: toolbar with Edit + Delete + inline editor
+                        if (owner.id === meId) {
+                            // Floating toolbar
+                            const bar = document.createElement('div');
+                            bar.className = 'item-toolbar';
+                            box.classList.add('has-toolbar');
+
+                            const edit = document.createElement('button');
+                            edit.className = 'edit-btn';
+                            edit.textContent = 'Edit';
+
+                            const del = document.createElement('button');
+                            del.className = 'delete-btn';
+                            del.textContent = 'Delete';
+
+                            bar.append(edit, del);
+                            box.appendChild(bar);
+
+                            // Inline edit form (hidden by default)
+                            // Inline edit form (hidden by default)
+                            const editForm = document.createElement('div');
+                            editForm.className = 'edit-row';
+                            editForm.style.display = 'none';
+
+                            const inTitleE = document.createElement('input'); inTitleE.className = 'input'; inTitleE.placeholder = 'Title *'; inTitleE.value = it.title || '';
+                            const inUrlE = document.createElement('input'); inUrlE.className = 'input'; inUrlE.placeholder = 'Product link (optional)'; inUrlE.value = it.url || '';
+                            const inImgE = document.createElement('input'); inImgE.className = 'input'; inImgE.placeholder = 'Image URL (optional)'; inImgE.value = it.image_url || '';
+                            const inPriceE = document.createElement('input'); inPriceE.className = 'input'; inPriceE.placeholder = 'Gift Price'; inPriceE.value = (it.price_cents != null ? (it.price_cents / 100).toFixed(2) : '');
+                            const inNotesE = document.createElement('textarea'); inNotesE.className = 'input'; inNotesE.rows = 2; inNotesE.placeholder = 'Notes'; inNotesE.value = it.notes || '';
+
+                            const actions = document.createElement('div'); actions.className = 'edit-actions';
+                            const saveBtn = document.createElement('button'); saveBtn.className = 'btn-lite'; saveBtn.textContent = 'Update';
+                            const cancelBtn = document.createElement('button'); cancelBtn.className = 'btn-lite'; cancelBtn.textContent = 'Cancel';
+                            const msg = document.createElement('span'); msg.className = 'muted';
+
+                            actions.append(saveBtn, cancelBtn, msg);
+
+                            // ⬇️ Append labeled fields instead of raw inputs
+                            editForm.append(
+                                makeField(`edt_title_${it.id}`, 'Title *', inTitleE),
+                                makeField(`edt_url_${it.id}`, 'Product link', inUrlE),
+                                makeField(`edt_img_${it.id}`, 'Image URL', inImgE),
+                                makeField(`edt_price_${it.id}`, 'Gift Price', inPriceE),
+                                makeField(`edt_notes_${it.id}`, 'Notes', inNotesE),
+                                actions
+                            );
+                            box.appendChild(editForm);
+
+
+                            // Toggle edit form
+                            edit.onclick = () => {
+                                editForm.style.display = (editForm.style.display === 'none') ? 'block' : 'none';
+                            };
+
+                            // Delete
+                            del.onclick = async () => {
+                                const warn = it.is_reserved
+                                    ? 'This item is currently reserved. Deleting it will remove that reservation.\n\nDelete anyway?'
+                                    : 'Delete this item from your wishlist?';
+                                if (!confirm(warn)) return;
+                                try { await deleteMyItem(it.id); await loadAll(); }
+                                catch (e) { notice.textContent = e.message || 'Could not delete'; }
+                            };
+
+                            // Save update
+                            saveBtn.onclick = async () => {
+                                msg.textContent = '';
+                                if (!inTitleE.value.trim()) { msg.textContent = 'Title required'; return; }
+                                try {
+                                    const price = inPriceE.value.trim();
+                                    const price_cents = price ? Math.round(Number(price.replace(/[$,\s]/g, '')) * 100) : null;
+                                    await updateMyItem(it.id, {
+                                        title: inTitleE.value.trim(),
+                                        url: inUrlE.value.trim() || null,
+                                        image_url: inImgE.value.trim() || null,
+                                        notes: inNotesE.value.trim() || null,
+                                        price_cents: Number.isFinite(price_cents) ? price_cents : null
+                                    });
+                                    msg.textContent = 'Updated!';
+                                    await loadAll();
+                                } catch (e) {
+                                    msg.textContent = e.message || 'Failed';
+                                }
+                            };
+
+                            cancelBtn.onclick = () => { editForm.style.display = 'none'; };
+                        }
+
+                        // Display content
+                        const title = document.createElement('div');
+                        title.style.fontWeight = '600';
+                        title.style.margin = '4px 0';
+                        title.textContent = it.title;
+                        box.appendChild(title);
+
+                        if (it.image_url) {
+                            const img = document.createElement('img');
+                            img.src = it.image_url; img.alt = it.title;
+                            box.appendChild(img);
+                        }
+                        if (it.url) {
+                            const a = document.createElement('a');
+                            a.href = it.url;
+                            a.target = '_blank';
+                            a.rel = 'noopener noreferrer';
+                            a.textContent = 'View link';
+                            a.className = 'btn-view';          // 👈 make it pretty
+                            box.appendChild(a);
+                        }
+
+                        if (it.notes) {
+                            const notes = document.createElement('div'); notes.textContent = it.notes; box.appendChild(notes);
+                        }
+                        if (it.price_cents != null) {
+                            const pr = document.createElement('div'); pr.className = 'muted'; pr.textContent = fmtPrice(it.price_cents); box.appendChild(pr);
+                        }
+
+                        const row = document.createElement('div'); row.className = 'row';
+                        const canAct = allowed.has(owner.id) && owner.id !== meId;       // assigned & not your own
+                        const canReserve = canAct && !it.is_reserved;
+                        const canUnreserve = !!it.reserved_by_me;                         // only the reserver sees Unreserve
+
+                        if (it.is_reserved) {
+                            const reserved = document.createElement('span'); reserved.className = 'pill green'; reserved.textContent = 'Reserved';
+                            row.append(reserved);
+                            if (canUnreserve) {
+                                const btn = document.createElement('button'); btn.textContent = 'Unreserve';
+                                btn.onclick = () => unreserve(it.id);
+                                row.append(btn);
+                            }
+                        } else if (canReserve) {
+                            const btn = document.createElement('button'); btn.textContent = 'Reserve';
+                            btn.onclick = () => reserve(it.id);
+                            row.append(btn);
+                        }
+
+                        box.appendChild(row);
+                        panel.appendChild(box);
+                    });
+
+
+                } else {
+                    // No items: just header + empty state (still track collapsed state)
+                    const empty = document.createElement('div'); empty.className = 'muted'; empty.textContent = 'No items yet';
+                    card.appendChild(empty);
+                }
+
+                root.appendChild(card);
+            });
+        }
+
+        loadAll();
+    </script>
+</body>
+
+</html>

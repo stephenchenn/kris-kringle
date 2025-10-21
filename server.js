@@ -53,8 +53,7 @@ CREATE TABLE IF NOT EXISTS gift_tiers (
 -- constraints:
 --  - one assignment per giver per tier (giver gives exactly one per tier)
 --  - one assignment per recipient per tier (recipient receives exactly one per tier)
-DROP TABLE IF EXISTS assignments;
-CREATE TABLE assignments (
+CREATE TABLE IF NOT EXISTS assignments (
   id TEXT PRIMARY KEY,
   event_id TEXT NOT NULL,
   tier_id TEXT NOT NULL,
@@ -76,6 +75,37 @@ CREATE INDEX IF NOT EXISTS idx_participants_event ON participants(event_id);
 CREATE INDEX IF NOT EXISTS idx_tiers_event ON gift_tiers(event_id, sort_order);
 CREATE INDEX IF NOT EXISTS idx_assignments_ev_tier_giver ON assignments(event_id, tier_id, giver_id);
 CREATE INDEX IF NOT EXISTS idx_assignments_ev_tier_recipient ON assignments(event_id, tier_id, recipient_id);
+
+CREATE TABLE IF NOT EXISTS wishlists (
+  id TEXT PRIMARY KEY,
+  event_id TEXT NOT NULL,
+  owner_id TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(event_id, owner_id),
+  FOREIGN KEY(event_id) REFERENCES events(id) ON DELETE CASCADE,
+  FOREIGN KEY(owner_id) REFERENCES participants(id) ON DELETE CASCADE
+);
+
+-- wishlist_items: items inside a wishlist
+CREATE TABLE IF NOT EXISTS wishlist_items (
+  id TEXT PRIMARY KEY,
+  wishlist_id TEXT NOT NULL,
+  title TEXT NOT NULL,
+  url TEXT,
+  notes TEXT,
+  price_cents INTEGER,
+  image_url TEXT,
+  reserved_by TEXT, -- participant id (optional)
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY(wishlist_id) REFERENCES wishlists(id) ON DELETE CASCADE,
+  FOREIGN KEY(reserved_by) REFERENCES participants(id) ON DELETE SET NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_wishlist_owner ON wishlists(event_id, owner_id);
+CREATE INDEX IF NOT EXISTS idx_wishlist_items_wl ON wishlist_items(wishlist_id);
+CREATE INDEX IF NOT EXISTS idx_wishlist_items_reserved ON wishlist_items(reserved_by);
 `);
 
 // --- Email transport ---
@@ -100,6 +130,30 @@ function getParticipantByToken(token) {
   `);
   return stmt.get(token);
 }
+
+// --- Wishlist helpers ---
+function requireMeByToken(token) {
+  if (!token) return null;
+  return db.prepare(`
+    SELECT p.id AS pid, p.name AS pname, p.email, p.event_id, e.name AS ename
+    FROM participants p
+    JOIN events e ON e.id = p.event_id
+    WHERE p.invite_token = ?
+  `).get(token);
+}
+
+function upsertWishlistForOwner(event_id, owner_id) {
+  const existing = db.prepare(
+    `SELECT id FROM wishlists WHERE event_id = ? AND owner_id = ?`
+  ).get(event_id, owner_id);
+  if (existing) return existing.id;
+  const id = randomUUID();
+  db.prepare(
+    `INSERT INTO wishlists (id, event_id, owner_id) VALUES (?,?,?)`
+  ).run(id, event_id, owner_id);
+  return id;
+}
+
 
 function listParticipants(event_id) {
   return db
@@ -188,6 +242,14 @@ function escapeHtml(s) {
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
 }
+
+function publicBaseUrl(req) {
+  const proto = req.get('x-forwarded-proto');
+  const host = req.get('x-forwarded-host');
+  if (proto && host) return `${proto}://${host}`;
+  return process.env.BASE_URL || "http://localhost:3000";
+}
+
 
 
 // --- API: who am I + recipients ---
@@ -310,15 +372,15 @@ app.post("/api/draw", async (req, res) => {
       // continue — we can still return recipients
     }
 
-  // send email using centralized helper (fire-and-forget)
-  sendAssignmentEmail({
-    to: meRow.email,
-    participantName: meRow.name,
-    eventName: meRow.event_name,
-    recipients_by_tier,
-    // replyTo: "Your Name <you@yourdomain.com>", // optional
-  })
-    .catch((e) => console.error("Email error:", e && e.message ? e.message : e));
+    // send email using centralized helper (fire-and-forget)
+    sendAssignmentEmail({
+      to: meRow.email,
+      participantName: meRow.name,
+      eventName: meRow.event_name,
+      recipients_by_tier,
+      // replyTo: "Your Name <you@yourdomain.com>", // optional
+    })
+      .catch((e) => console.error("Email error:", e && e.message ? e.message : e));
 
   }
 
@@ -515,6 +577,104 @@ app.post("/api/admin/send-invites", async (req, res) => {
   res.json({ ok: true, sent, failed });
 });
 
+app.post("/api/admin/send-wishlists", async (req, res) => {
+  const { secret, eventId } = req.body || {};
+  if (secret !== process.env.ADMIN_SECRET) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+
+  // Use provided event or the most-recent one
+  const evt =
+    eventId ||
+    db.prepare(`SELECT id FROM events ORDER BY created_at DESC LIMIT 1`).get()?.id;
+
+  if (!evt) return res.status(404).json({ error: "No event found" });
+
+  const eventRow = db
+    .prepare(`SELECT id, name FROM events WHERE id = ?`)
+    .get(evt);
+
+  const base = publicBaseUrl(req); // or: (process.env.BASE_URL || "http://localhost:3000")
+
+  const people = db
+    .prepare(`SELECT name, email, invite_token FROM participants WHERE event_id = ?`)
+    .all(evt);
+
+  // gently paced transporter helps too
+  const transporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST,
+    port: Number(process.env.SMTP_PORT || 587),
+    secure: Number(process.env.SMTP_PORT) === 465,
+    auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+    pool: true,
+    maxConnections: 2,
+    maxMessages: 50,
+    rateLimit: 10,   // <= 10 msgs/sec
+    rateDelta: 1000
+  });
+
+  function buildWishlistEmail({ personName, eventName, link }) {
+    const subject = `Your wishlist link for ${eventName}`;
+
+    // PLAIN TEXT (important)
+    const text = [
+      `Hi ${personName},`,
+      ``,
+      `Your wishlist page for ${eventName} is ready.`,
+      `Open your personal link: ${link}`,
+      ``,
+      `This link is authenticated by your invite token. Do not share it.`,
+      ``,
+      `Thanks!`
+    ].join('\n');
+
+    // MINIMAL HTML (one link, no emojis, minimal styling)
+    const html =
+      `<div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:16px;color:#111">` +
+      `<p>Hi ${escapeHtml(personName)},</p>` +
+      `<p>Your wishlist page for ${escapeHtml(eventName)} is ready.</p>` +
+      `<p><a href="${link}" rel="noopener">Open your personal link</a></p>` +
+      `<p style="color:#6b7280;font-size:14px">This link is authenticated by your invite token. Do not share it.</p>` +
+      `<p>Thanks!</p>` +
+      `</div>`;
+
+    return { subject, text, html };
+  }
+
+  async function sendWishlist({ to, subject, text, html }) {
+    return transporter.sendMail({
+      from: process.env.FROM_EMAIL,                    // e.g. "Wong's Kris Kringle <noreply@mail.wongskringle.online>"
+      to,
+      subject,
+      text,    // 👈 include text
+      html,
+      // If your ESP supports per-message tracking flags, disable them:
+      // headers: { 'X-MJ-TrackOpen': '0', 'X-MJ-TrackClick': '0' } // (Mailjet SMTP header names vary; use dashboard if unsure)
+    });
+  }
+
+
+  let sent = 0;
+  const failed = [];
+
+  for (const p of people) {
+    const wl = `${base}/wishlists?token=${encodeURIComponent(p.invite_token)}`;
+    const { subject, text, html } = buildWishlistEmail({
+      personName: p.name, eventName: eventRow.name, link: wl
+    });
+
+    try {
+      await sendWishlist({ to: p.email, subject, text, html });
+      sent++;
+    } catch (e) {
+      failed.push({ email: p.email, error: e.message });
+    }
+  }
+
+  return res.json({ ok: true, sent, failed });
+});
+
+
 app.post("/api/resend", async (req, res) => {
   const { token } = req.body || {};
   if (!token) return res.status(400).json({ error: "Missing token" });
@@ -563,6 +723,231 @@ app.post("/api/resend", async (req, res) => {
   }
 });
 
+// --- Wishlist: me (owner/manage) ---
+app.get('/api/wishlist/me', (req, res) => {
+  const me = requireMeByToken(req.query.token);
+  if (!me) return res.status(401).json({ error: 'invalid token' });
+
+  const wid = upsertWishlistForOwner(me.event_id, me.pid);
+  const wl = db.prepare(`SELECT id,event_id,owner_id,created_at,updated_at FROM wishlists WHERE id=?`).get(wid);
+
+  // do not return reserved_by — only a boolean
+  const items = db.prepare(`
+    SELECT id, title, url, notes, price_cents, image_url,
+           CASE WHEN reserved_by IS NULL THEN 0 ELSE 1 END AS is_reserved,
+           created_at, updated_at
+    FROM wishlist_items
+    WHERE wishlist_id=?
+    ORDER BY created_at DESC
+  `).all(wid);
+
+  res.json({ wishlist: wl, items });
+});
+
+// --- Wishlist: create item (owner only) ---
+app.post('/api/wishlist/item', (req, res) => {
+  const { token, title, url, notes, price_cents, image_url } = req.body || {};
+  const me = requireMeByToken(token);
+  if (!me) return res.status(401).json({ error: 'invalid token' });
+  if (!title || !String(title).trim()) return res.status(400).json({ error: 'title required' });
+
+  const wid = upsertWishlistForOwner(me.event_id, me.pid);
+  const id = randomUUID();
+  db.prepare(`
+    INSERT INTO wishlist_items (id, wishlist_id, title, url, notes, price_cents, image_url)
+    VALUES (?,?,?,?,?,?,?)
+  `).run(
+    id,
+    wid,
+    String(title).trim(),
+    url || null,
+    notes || null,
+    Number.isInteger(price_cents) ? price_cents : null,
+    image_url || null
+  );
+
+  const row = db.prepare(`SELECT * FROM wishlist_items WHERE id=?`).get(id);
+  res.json({ ok: true, item: row });
+});
+
+// --- Wishlist: update item (owner only) ---
+app.put('/api/wishlist/item/:id', (req, res) => {
+  const id = req.params.id;
+  const { token, title, url, notes, price_cents, image_url } = req.body || {};
+  const me = requireMeByToken(token);
+  if (!me) return res.status(401).json({ error: 'invalid token' });
+
+  const row = db.prepare(`
+    SELECT wi.id, wl.owner_id
+    FROM wishlist_items wi
+    JOIN wishlists wl ON wl.id = wi.wishlist_id
+    WHERE wi.id = ?
+  `).get(id);
+  if (!row) return res.status(404).json({ error: 'not found' });
+  if (row.owner_id !== me.pid) return res.status(403).json({ error: 'forbidden' });
+
+  db.prepare(`
+    UPDATE wishlist_items SET
+      title       = COALESCE(?, title),
+      url         = COALESCE(?, url),
+      notes       = COALESCE(?, notes),
+      price_cents = COALESCE(?, price_cents),
+      image_url   = COALESCE(?, image_url),
+      updated_at  = datetime('now')
+    WHERE id = ?
+  `).run(
+    title || null,
+    url || null,
+    notes || null,
+    Number.isInteger(price_cents) ? price_cents : null,
+    image_url || null,
+    id
+  );
+
+  const updated = db.prepare(`SELECT * FROM wishlist_items WHERE id=?`).get(id);
+  res.json({ ok: true, item: updated });
+});
+
+// --- Wishlist: delete item (owner only) ---
+app.delete('/api/wishlist/item/:id', (req, res) => {
+  const id = req.params.id;
+  const { token } = req.body || {};
+  const me = requireMeByToken(token);
+  if (!me) return res.status(401).json({ error: 'invalid token' });
+
+  const row = db.prepare(`
+    SELECT wi.id, wl.owner_id
+    FROM wishlist_items wi
+    JOIN wishlists wl ON wl.id = wi.wishlist_id
+    WHERE wi.id = ?
+  `).get(id);
+  if (!row) return res.status(404).json({ error: 'not found' });
+  if (row.owner_id !== me.pid) return res.status(403).json({ error: 'forbidden' });
+
+  db.prepare(`DELETE FROM wishlist_items WHERE id=?`).run(id);
+  res.json({ ok: true });
+});
+
+// --- Wishlist: reserve / unreserve (optional claiming) ---
+app.post('/api/wishlist/item/:id/reserve', (req, res) => {
+  const id = req.params.id;
+  const { token } = req.body || {};
+  const me = requireMeByToken(token);
+  if (!me) return res.status(401).json({ error: 'invalid token' });
+
+  // Load item + wishlist owner + event
+  const row = db.prepare(`
+    SELECT wi.id, wi.reserved_by, wl.owner_id, wl.event_id
+    FROM wishlist_items wi
+    JOIN wishlists wl ON wl.id = wi.wishlist_id
+    WHERE wi.id = ?
+  `).get(id);
+  if (!row) return res.status(404).json({ error: 'not found' });
+  if (row.event_id !== me.event_id) return res.status(403).json({ error: 'forbidden' });
+  if (row.owner_id === me.pid) return res.status(400).json({ error: "can't reserve your own item" });
+
+  // ✅ NEW: only givers assigned to this owner may reserve
+  const myRecipients = getRecipientsForGiver(me.event_id, me.pid); // [{id, name}]
+  const allowedRecipientIds = new Set(myRecipients.map(r => r.id));
+  if (!allowedRecipientIds.has(row.owner_id)) {
+    return res.status(403).json({ error: 'not assigned to this participant' });
+  }
+
+  if (row.reserved_by && row.reserved_by !== me.pid) {
+    return res.status(409).json({ error: 'already reserved' });
+  }
+
+  db.prepare(`UPDATE wishlist_items SET reserved_by=?, updated_at=datetime('now') WHERE id=?`)
+    .run(me.pid, id);
+  res.json({ ok: true });
+});
+
+
+app.post('/api/wishlist/item/:id/unreserve', (req, res) => {
+  const id = req.params.id;
+  const { token } = req.body || {};
+  const me = requireMeByToken(token);
+  if (!me) return res.status(401).json({ error: 'invalid token' });
+
+  const row = db.prepare(`
+    SELECT wi.id, wi.reserved_by, wl.event_id
+    FROM wishlist_items wi
+    JOIN wishlists wl ON wl.id = wi.wishlist_id
+    WHERE wi.id = ?
+  `).get(id);
+  if (!row) return res.status(404).json({ error: 'not found' });
+  if (row.event_id !== me.event_id) return res.status(403).json({ error: 'forbidden' });
+  if (row.reserved_by && row.reserved_by !== me.pid) {
+    return res.status(403).json({ error: 'not your reservation' });
+  }
+
+  db.prepare(`UPDATE wishlist_items SET reserved_by=NULL, updated_at=datetime('now') WHERE id=?`).run(id);
+  res.json({ ok: true });
+});
+
+
+// List everyone’s wishlists for the event (anonymized).
+// GET /api/wishlists/all?token=...
+app.get('/api/wishlists/all', (req, res) => {
+  const me = requireMeByToken(req.query.token);
+  if (!me) return res.status(401).json({ error: 'invalid token' });
+
+  const people = db.prepare(`
+    SELECT id, name FROM participants
+    WHERE event_id = ?
+    ORDER BY name COLLATE NOCASE
+  `).all(me.event_id);
+
+  const myRecipients = getRecipientsForGiver(me.event_id, me.pid); // [{id,name}]
+  const allowedOwnerIds = new Set(myRecipients.map(r => r.id));
+
+  const rows = db.prepare(`
+    SELECT wl.owner_id,
+           wi.id AS item_id, wi.title, wi.url, wi.notes, wi.price_cents, wi.image_url,
+           CASE WHEN wi.reserved_by IS NULL THEN 0 ELSE 1 END AS is_reserved,
+           CASE WHEN wi.reserved_by = ? THEN 1 ELSE 0 END AS reserved_by_me,
+           wi.created_at
+    FROM wishlists wl
+    LEFT JOIN wishlist_items wi ON wi.wishlist_id = wl.id
+    WHERE wl.event_id = ?
+    ORDER BY wi.created_at DESC
+  `).all(me.pid, me.event_id);  // 👈 pass me.pid
+
+  const byOwner = new Map(people.map(p => [p.id, { owner: p, items: [] }]));
+  for (const r of rows) {
+    const bucket = byOwner.get(r.owner_id);
+    if (!bucket) continue;
+    if (r.item_id) {
+      bucket.items.push({
+        id: r.item_id,
+        title: r.title,
+        url: r.url,
+        notes: r.notes,
+        price_cents: r.price_cents,
+        image_url: r.image_url,
+        is_reserved: r.is_reserved,
+        reserved_by_me: r.reserved_by_me,  // 👈 new
+      });
+    }
+  }
+
+  const tiers = db.prepare(`
+    SELECT id, name, budget_cents, sort_order
+    FROM gift_tiers
+    WHERE event_id = ?
+    ORDER BY sort_order
+  `).all(me.event_id);
+
+  res.json({
+    me: { id: me.pid, name: me.pname },
+    event: { id: me.event_id, name: me.ename },
+    tiers: tiers.map(t => ({ id: t.id, name: t.name, budget_cents: t.budget_cents })), // 👈 add this
+    allowed_owner_ids: Array.from(allowedOwnerIds),
+    participants: people,
+    wishlists: people.map(p => byOwner.get(p.id) || { owner: p, items: [] })
+  });
+});
+
 
 // lightweight liveness check
 app.get("/healthz", (req, res) => {
@@ -585,6 +970,10 @@ app.post("/api/admin/reset", (req, res) => {
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
+});
+
+app.get('/wishlists', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'wishlists.html'));
 });
 
 const indexFile = path.join(__dirname, "public", "index.html");
