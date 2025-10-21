@@ -825,9 +825,17 @@ app.get('/api/wishlists/all', (req, res) => {
     }
   }
 
+  const tiers = db.prepare(`
+    SELECT id, name, budget_cents, sort_order
+    FROM gift_tiers
+    WHERE event_id = ?
+    ORDER BY sort_order
+  `).all(me.event_id);
+
   res.json({
     me: { id: me.pid, name: me.pname },
-    event: { id: me.event_id, name: me.ename },      // 👈 add this
+    event: { id: me.event_id, name: me.ename },
+    tiers: tiers.map(t => ({ id: t.id, name: t.name, budget_cents: t.budget_cents })), // 👈 add this
     allowed_owner_ids: Array.from(allowedOwnerIds),
     participants: people,
     wishlists: people.map(p => byOwner.get(p.id) || { owner: p, items: [] })

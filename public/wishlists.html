@@ -30,11 +30,38 @@
             border: 1px solid #e5e7eb;
             border-radius: 12px;
             padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        /* Header alignment fix */
+        .card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .card-header .left {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            min-width: 0;
+        }
+
+        .card-header .right {
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
         }
 
         .owner {
             font-weight: 600;
-            margin-bottom: 8px;
+            margin: 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .item {
@@ -100,7 +127,7 @@
             border: 1px solid #e5e7eb;
         }
 
-        /* collapse helpers */
+        /* collapse */
         .collapse {
             overflow: hidden;
             transition: max-height 0.25s ease;
@@ -114,8 +141,6 @@
             max-height: 2000px;
         }
 
-        /* big enough for most lists */
-
         .btn-link {
             background: transparent;
             color: #2563eb;
@@ -124,41 +149,17 @@
             cursor: pointer;
         }
 
-        .card {
+        /* Top form */
+        .add-wrap {
             border: 1px solid #e5e7eb;
             border-radius: 12px;
             padding: 12px;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
+            margin: 16px 0;
         }
 
-        .card-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 12px;
-        }
-
-        .card-header .left {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            min-width: 0;
-        }
-
-        .card-header .right {
-            display: inline-flex;
-            align-items: center;
-            gap: 12px;
-        }
-
-        .owner {
-            font-weight: 600;
-            margin: 0;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
+        .greeting {
+            font-size: 16px;
+            margin: 6px 0 12px;
         }
 
         .input,
@@ -183,21 +184,93 @@
         .input-row .full {
             flex: 1 1 100%;
         }
+
+        .greeting {
+            font-size: 18px;
+            /* larger */
+            line-height: 1.5;
+            font-weight: 600;
+            /* semi-bold */
+            margin: 20px 0 16px;
+            /* more space above/below */
+            padding: 12px 14px;
+            /* comfy padding */
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            background: #fafaf9;
+            /* subtle warm tint */
+        }
+
+        @media (min-width: 768px) {
+            .greeting {
+                font-size: 20px;
+                margin: 24px 0 18px;
+                padding: 14px 16px;
+            }
+        }
+
+        .form-title {
+            font-weight: 600;
+            margin: 4px 0 10px;
+        }
     </style>
 </head>
 
 <body>
-    <h1>Kris Kringle Wishlists</h1>
+    <h1>Everyone’s Wishlists</h1>
     <div class="muted">Authenticated by your invite token. You can reserve items anonymously so no one buys duplicates.
     </div>
+
+    <!-- Greeting OUTSIDE the add box -->
+    <p id="greeting" class="greeting" hidden></p>
+
+    <!-- Global add form -->
+    <div id="addForm" class="add-wrap" hidden>
+        <div class="form-title">I’d like to receive:</div>
+        <div class="input-row">
+            <input id="f_title" class="input full" placeholder="Title *" />
+        </div>
+        <div class="input-row">
+            <input id="f_url" class="input half" placeholder="Product link (optional)" />
+            <input id="f_price" class="input half" placeholder="Target price (e.g. 49.99)" />
+        </div>
+        <div class="input-row">
+            <input id="f_image" class="input half" placeholder="Image URL (optional)" />
+            <textarea id="f_notes" class="input half input" rows="2" placeholder="Notes (size, color, etc.)"></textarea>
+        </div>
+        <div class="row">
+            <button id="btn_add">Add to my wishlist</button>
+            <span id="msg_add" class="muted"></span>
+        </div>
+    </div>
+
 
     <div id="notice" class="muted" style="margin:10px 0;"></div>
     <div id="root" class="grid"></div>
 
     <script>
+        const qs = new URLSearchParams(location.search);
+        const token = qs.get('token');
+        if (!token) { document.body.innerHTML = '<p class="muted">Missing token</p>'; throw new Error('missing token'); }
+
+        const root = document.getElementById('root');
+        const notice = document.getElementById('notice');
+
+        // Top form elements
+        const addWrap = document.getElementById('addForm');
+        const greetEl = document.getElementById('greeting');
+        const inTitle = document.getElementById('f_title');
+        const inUrl = document.getElementById('f_url');
+        const inPrice = document.getElementById('f_price');
+        const inImage = document.getElementById('f_image');
+        const inNotes = document.getElementById('f_notes');
+        const btnAdd = document.getElementById('btn_add');
+        const msgAdd = document.getElementById('msg_add');
+
+        function fmtPrice(cents) { return (cents == null || isNaN(cents)) ? '' : `$${(cents / 100).toFixed(2)}`; }
         function centsFromPrice(p) {
             if (!p) return null;
-            const n = Number(String(p).replace(/[$,\s]/g, ''));
+            const n = Number(String(p).replace(/[$,\\s]/g, ''));
             return Number.isFinite(n) ? Math.round(n * 100) : null;
         }
 
@@ -217,22 +290,64 @@
             if (!resp.ok) throw new Error(out.error || 'Failed to add');
         }
 
+        // helper near top of <script>
+        function fmtDollars(cents) {
+            if (cents == null || isNaN(cents) || cents <= 0) return '';
+            return `$${(cents / 100).toFixed(0)}`;
+        }
 
-        const qs = new URLSearchParams(location.search);
-        const token = qs.get('token');
-        if (!token) { document.body.innerHTML = '<p class="muted">Missing token</p>'; throw new Error('missing token'); }
 
-        const root = document.getElementById('root');
-        const notice = document.getElementById('notice');
-
-        function fmtPrice(cents) { return (cents == null || isNaN(cents)) ? '' : `$${(cents / 100).toFixed(2)}`; }
+        btnAdd?.addEventListener('click', async () => {
+            msgAdd.textContent = '';
+            try {
+                if (!inTitle.value.trim()) { msgAdd.textContent = 'Title required'; return; }
+                await addMyItem({
+                    title: inTitle.value,
+                    url: inUrl.value,
+                    notes: inNotes.value,
+                    price: inPrice.value,
+                    image_url: inImage.value
+                });
+                inTitle.value = inUrl.value = inNotes.value = inPrice.value = inImage.value = '';
+                msgAdd.textContent = 'Added!';
+                await loadAll();
+            } catch (e) { msgAdd.textContent = e.message || 'Failed'; }
+        });
 
         async function loadAll() {
             const r = await fetch(`/api/wishlists/all?token=${encodeURIComponent(token)}`);
             const data = await r.json();
             if (!r.ok) { notice.textContent = data.error || 'Failed to load'; return; }
+
+            // Build: "$50 for Gift 1 OR $25 for Gift 2"
+            const t = (data.tiers || []);
+            const tiersLabel = t
+                .filter(tt => Number.isFinite(tt.budget_cents) && tt.budget_cents > 0)
+                .map(tt => `${fmtDollars(tt.budget_cents)} for ${tt.name}`)
+                .join(' OR ');
+
+            // Set placeholder + tooltip
+            if (tiersLabel) {
+                inPrice.placeholder = `Target price (${tiersLabel})`;
+                inPrice.title = tiersLabel;
+            } else {
+                inPrice.placeholder = 'Target price (e.g. 49.99)';
+                inPrice.title = '';
+            }
+
+
+            // Greeting outside the box
+            const meName = data.me?.name || 'there';
+            const eventName = data.event?.name || 'your event';
+            greetEl.textContent = `Hi ${meName}! Welcome :) Please submit what you'd like to receive this year at ${eventName}.`;
+            greetEl.hidden = false;
+
+            // Show the add box
+            addWrap.hidden = false;
+
             renderAll(data);
         }
+
 
         async function reserve(itemId) {
             const r = await fetch(`/api/wishlist/item/${itemId}/reserve`, {
@@ -262,9 +377,8 @@
             data.wishlists.forEach(({ owner, items }) => {
                 const card = document.createElement('div'); card.className = 'card';
 
-                // Header row (left: name + "you", right: collapse)
+                // Header with name/pill on left, collapse on right
                 const header = document.createElement('div'); header.className = 'card-header';
-
                 const left = document.createElement('div'); left.className = 'left';
                 const nameEl = document.createElement('div'); nameEl.className = 'owner'; nameEl.textContent = owner.name;
                 left.appendChild(nameEl);
@@ -272,83 +386,35 @@
                     const pill = document.createElement('span'); pill.className = 'pill gray'; pill.textContent = 'you';
                     left.appendChild(pill);
                 }
-
                 const right = document.createElement('div'); right.className = 'right';
                 const count = (items && items.length) || 0;
-                const sectionId = `wl-${owner.id}`;
-                const toggle = document.createElement('button');
-                toggle.type = 'button';
-                toggle.className = 'btn-link';
-                toggle.setAttribute('aria-controls', sectionId);
-                toggle.setAttribute('aria-expanded', 'true'); // default expanded
-                toggle.textContent = count ? `Collapse (${count})` : 'Collapse';
-                toggle.onclick = () => {
-                    const panel = document.getElementById(sectionId);
-                    const nowCollapsed = panel.classList.contains('expanded');
-                    panel.classList.toggle('expanded', !nowCollapsed);
-                    panel.classList.toggle('collapsed', nowCollapsed);
-                    toggle.setAttribute('aria-expanded', String(!nowCollapsed));
-                    toggle.textContent = (!nowCollapsed) ? `Collapse (${count})` : `Expand (${count})`;
-                };
-                right.appendChild(toggle);
-
-                header.append(left, right);
-                card.appendChild(header);
-
-
-                // Collapsible panel that holds all items for this owner
-                const panel = document.createElement('div');
-                panel.id = sectionId;
-                panel.className = 'collapse expanded'; // default expanded; switch to 'collapsed' if you want closed by default
-                card.appendChild(panel);
-
-                // If this is my card, show an Add form at the top of the panel
-                if (owner.id === meId) {
-                    const form = document.createElement('div'); form.className = 'item';
-                    const h = document.createElement('div'); h.style.fontWeight = '600'; h.textContent = 'Add item';
-                    form.appendChild(h);
-
-                    const r1 = document.createElement('div'); r1.className = 'input-row';
-                    const inTitle = document.createElement('input'); inTitle.className = 'input full'; inTitle.placeholder = 'Title *';
-                    r1.appendChild(inTitle);
-
-                    const r2 = document.createElement('div'); r2.className = 'input-row';
-                    const inUrl = document.createElement('input'); inUrl.className = 'input half'; inUrl.placeholder = 'Product link (optional)';
-                    const inPrice = document.createElement('input'); inPrice.className = 'input half'; inPrice.placeholder = 'Target price (e.g. 49.99)';
-                    r2.append(inUrl, inPrice);
-
-                    const r3 = document.createElement('div'); r3.className = 'input-row';
-                    const inImage = document.createElement('input'); inImage.className = 'input half'; inImage.placeholder = 'Image URL (optional)';
-                    const inNotes = document.createElement('textarea'); inNotes.className = 'input half'; inNotes.rows = 2; inNotes.placeholder = 'Notes (size, color, etc.)';
-                    r3.append(inImage, inNotes);
-
-                    const r4 = document.createElement('div'); r4.className = 'row';
-                    const addBtn = document.createElement('button'); addBtn.textContent = 'Add';
-                    const msg = document.createElement('span'); msg.className = 'muted';
-                    addBtn.onclick = async () => {
-                        msg.textContent = '';
-                        try {
-                            if (!inTitle.value.trim()) { msg.textContent = 'Title required'; return; }
-                            await addMyItem({
-                                title: inTitle.value, url: inUrl.value, notes: inNotes.value,
-                                price: inPrice.value, image_url: inImage.value
-                            });
-                            inTitle.value = inUrl.value = inNotes.value = inPrice.value = inImage.value = '';
-                            msg.textContent = 'Added!';
-                            await loadAll();
-                        } catch (e) { msg.textContent = e.message || 'Failed'; }
+                if (count > 0) {
+                    const sectionId = `wl-${owner.id}`;
+                    const toggle = document.createElement('button');
+                    toggle.type = 'button';
+                    toggle.className = 'btn-link';
+                    toggle.setAttribute('aria-controls', sectionId);
+                    toggle.setAttribute('aria-expanded', 'true');
+                    toggle.textContent = `Collapse (${count})`;
+                    toggle.onclick = () => {
+                        const panel = document.getElementById(sectionId);
+                        const nowCollapsed = panel.classList.contains('expanded');
+                        panel.classList.toggle('expanded', !nowCollapsed);
+                        panel.classList.toggle('collapsed', nowCollapsed);
+                        toggle.setAttribute('aria-expanded', String(!nowCollapsed));
+                        toggle.textContent = (!nowCollapsed) ? `Collapse (${count})` : `Expand (${count})`;
                     };
-                    r4.append(addBtn, msg);
+                    right.appendChild(toggle);
 
-                    form.append(r1, r2, r3, r4);
-                    panel.appendChild(form);
-                }
+                    header.append(left, right);
+                    card.appendChild(header);
 
+                    // Items panel
+                    const panel = document.createElement('div');
+                    panel.id = sectionId;
+                    panel.className = 'collapse expanded';
+                    card.appendChild(panel);
 
-                if (!items || items.length === 0) {
-                    const empty = document.createElement('div'); empty.className = 'muted'; empty.textContent = 'No items yet';
-                    panel.appendChild(empty);
-                } else {
                     items.forEach(it => {
                         const box = document.createElement('div'); box.className = 'item';
                         const title = document.createElement('div'); title.style.fontWeight = '600'; title.style.margin = '4px 0'; title.textContent = it.title;
@@ -358,36 +424,36 @@
                         if (it.notes) { const notes = document.createElement('div'); notes.textContent = it.notes; box.appendChild(notes); }
                         if (it.price_cents != null) { const pr = document.createElement('div'); pr.className = 'muted'; pr.textContent = fmtPrice(it.price_cents); box.appendChild(pr); }
 
-                        const row = document.createElement('div');
-                        row.className = 'row';
+                        const row = document.createElement('div'); row.className = 'row';
 
                         const canAct = allowed.has(owner.id) && owner.id !== meId; // assigned & not your own
                         const canReserve = canAct && !it.is_reserved;
-                        const canUnreserve = !!it.reserved_by_me;                  // 👈 only the reserver sees Unreserve
+                        const canUnreserve = !!it.reserved_by_me;                  // only the reserver sees Unreserve
 
                         if (it.is_reserved) {
-                            const reserved = document.createElement('span');
-                            reserved.className = 'pill green';
-                            reserved.textContent = 'Reserved';
+                            const reserved = document.createElement('span'); reserved.className = 'pill green'; reserved.textContent = 'Reserved';
                             row.append(reserved);
-
                             if (canUnreserve) {
-                                const btn = document.createElement('button');
-                                btn.textContent = 'Unreserve';
+                                const btn = document.createElement('button'); btn.textContent = 'Unreserve';
                                 btn.onclick = () => unreserve(it.id);
                                 row.append(btn);
                             }
                         } else if (canReserve) {
-                            const btn = document.createElement('button');
-                            btn.textContent = 'Reserve';
+                            const btn = document.createElement('button'); btn.textContent = 'Reserve';
                             btn.onclick = () => reserve(it.id);
                             row.append(btn);
                         }
-                        // else: show nothing
 
                         box.appendChild(row);
-                        panel.appendChild(box); // ⬅️ append to the collapsible panel
+                        panel.appendChild(box);
                     });
+
+                } else {
+                    // No items: just header + empty state
+                    header.append(left, right);
+                    card.appendChild(header);
+                    const empty = document.createElement('div'); empty.className = 'muted'; empty.textContent = 'No items yet';
+                    card.appendChild(empty);
                 }
 
                 root.appendChild(card);
