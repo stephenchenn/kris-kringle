@@ -948,6 +948,10 @@ app.get('/api/wishlists/all', (req, res) => {
   });
 });
 
+app.get('/favicon.ico', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'favicon.ico'));
+});
+
 
 // lightweight liveness check
 app.get("/healthz", (req, res) => {
