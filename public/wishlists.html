@@ -533,11 +533,19 @@
             font-weight: 600;
         }
 
-.details {
+#event-info .details {
   margin-left: 6px;          /* shift the block a bit */
   padding-left: 12px;        /* space before the text */
-  border-left: 3px solid #e5e7eb;  /* subtle guideline */
+  border-left: 3px solid #e5e7eb; /* subtle guideline */
 }
+
+        /* thin divider used inside info card */
+        .divider {
+            height: 1px;
+            background: #e5e7eb;
+            margin: 12px 0;
+            border-radius: 9999px;
+        }
     </style>
 </head>
 
@@ -742,28 +750,28 @@
                 inPrice.title = '';
             }
 
-            // Greeting outside the box
+            // Greeting outside the box (unchanged)
             const meName = data.me?.name || 'there';
-            const eventName = data.event?.name || 'your event';
             greetEl.textContent = `Hi ${meName}! Welcome :)`;
             greetEl.hidden = false;
 
-            // After you set the greeting:
+            // Build one combined card just under the greeting
             const infoHost = document.getElementById('event-info');
             infoHost.innerHTML = ''; // reset
+            const card = document.createElement('div');
+            card.className = 'add-wrap';
+            card.style.marginTop = '8px';
 
-            const evBox = document.createElement('div');
-            evBox.className = 'add-wrap'; // reuse your nice card style
-            evBox.style.marginTop = '8px';
+            // ----- Event Info (top half) -----
+            const title1 = document.createElement('div');
+            title1.className = 'form-title';
+            title1.textContent = 'Event Info:';
 
-            const title = document.createElement('div');
-            title.className = 'form-title';
-            title.textContent = 'Event Info:';
-
-            const list = document.createElement('div');
-            list.className = 'details';              // add this line
-            list.style.display = 'grid';
-            list.style.rowGap = '6px';
+            const list1 = document.createElement('div');
+list1.className = 'details';
+            list1.style.display = 'grid';
+            list1.style.rowGap = '6px';
+            
 
             const li1 = document.createElement('div');
             li1.innerHTML = `<strong>Name:</strong> ${data.event?.name || '—'}`;
@@ -775,53 +783,50 @@
             const li3 = document.createElement('div');
             li3.innerHTML = `<strong>Location:</strong> ${data.event?.location || '—'}`;
 
-            list.append(li1, li2, li3);
-            evBox.append(title, list);
-            infoHost.appendChild(evBox);
+            list1.append(li1, li2, li3);
+            card.append(title1, list1);
 
-            // Draw info under greeting
-            let drawHost = document.getElementById('draw-info');
-            drawHost.innerHTML = '';
+            // divider
+            const divider = document.createElement('div');
+            divider.className = 'divider';
+            card.appendChild(divider);
 
+            // ----- Draw Info (bottom half) -----
             const drawn = !!data.me?.has_drawn;
             const rbt = Array.isArray(data.recipients_by_tier) ? data.recipients_by_tier : [];
-            const base = location.origin; // your BASE_URL
+            const base = location.origin;
             const myToken = data.me?.invite_token;
 
             if (drawn && rbt.length > 0) {
-                const box = document.createElement('div');
-                box.className = 'add-wrap';
-                box.style.marginTop = '8px';
+                const title2 = document.createElement('div');
+                title2.className = 'form-title';
+                title2.textContent = "This year you've drawn:";
 
-                const title = document.createElement('div');
-                title.className = 'form-title';
-                title.textContent = "This year you've drawn:";
+                const list2 = document.createElement('div');
+                list2.className = 'details';
+                list2.style.display = 'grid';
+                list2.style.rowGap = '6px';
 
-                const list = document.createElement('div');
-                list.className = 'details';              // add this line
-                list.style.display = 'grid';
-                list.style.rowGap = '6px';
-
-                // helper to format budgets as whole dollars
-                const fmtWhole = (cents) => (typeof cents === 'number' && cents > 0) ? `$${(cents / 100).toFixed(0)}` : '';
+                const fmtWhole = (cents) =>
+                    (typeof cents === 'number' && cents > 0) ? `$${(cents / 100).toFixed(0)}` : '';
 
                 for (const t of rbt) {
                     const line = document.createElement('div');
                     const budget = fmtWhole(t.budget_cents);
                     const label = budget ? `${t.name} (${budget})` : t.name;
                     line.innerHTML = `<strong>${label}:</strong> ${t.recipient || '—'}`;
-                    list.appendChild(line);
+                    list2.appendChild(line);
                 }
 
-                box.append(title, list);
-                drawHost.appendChild(box);
+                card.append(title2, list2);
             } else {
                 const warn = document.createElement('div');
-                warn.className = 'add-wrap';
-                warn.style.marginTop = '8px';
-                warn.style.borderColor = '#fecaca';
+                warn.style.marginTop = '4px';
+                warn.style.padding = '8px 10px';
+                warn.style.border = '1px solid #fecaca';
                 warn.style.background = '#fef2f2';
                 warn.style.color = '#991b1b';
+                warn.style.borderRadius = '10px';
 
                 const msg = document.createElement('div');
                 msg.style.marginBottom = '10px';
@@ -829,22 +834,23 @@
                 msg.textContent = `You haven't drawn your names yet.`;
 
                 const link = myToken ? `${base}/?token=${encodeURIComponent(myToken)}` : `${base}/`;
-
-                // Use the same button style as “Add to my wishlist”
                 const btn = document.createElement('button');
                 btn.type = 'button';
                 btn.textContent = 'Draw names now';
                 btn.onclick = () => { location.href = link; };
 
                 warn.append(msg, btn);
-                drawHost.appendChild(warn);
+                card.append(warn);
             }
 
+            infoHost.appendChild(card);
 
             // Show the add box
             addWrap.hidden = false;
 
+            // Continue as before…
             renderAll(data);
+
         }
 
 
