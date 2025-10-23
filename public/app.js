@@ -19,6 +19,7 @@
   const errorEl = document.getElementById("error");
   const noteEl = document.getElementById("note");
   const resendBtn = document.getElementById("resendBtn"); // may be null if not added
+  const wishlistBtn = document.getElementById("wishlistBtn");
 
   if (!token) {
     if (errorEl) errorEl.textContent = "Invalid or missing invite link.";
@@ -67,6 +68,21 @@
       const haveAll = (Array.isArray(data.recipients_by_tier) && data.recipients_by_tier.every(t => !!t.recipient));
       const canDraw = !data.me.has_drawn || !haveAll;
       drawBtn.disabled = !canDraw;
+
+      // After computing `haveAll` and `canDraw`
+      const wlUrl = `/wishlists?token=${encodeURIComponent(token)}`;
+      if (wishlistBtn) {
+        const hasAnyRecipient = Array.isArray(data.recipients_by_tier) && data.recipients_by_tier.some(t => !!t.recipient);
+        if (data.me.has_drawn && hasAnyRecipient) {
+          wishlistBtn.style.display = "";   // show
+          wishlistBtn.disabled = false;
+          wishlistBtn.onclick = () => { location.href = wlUrl; };
+        } else {
+          wishlistBtn.style.display = "none"; // hide until drawn
+          wishlistBtn.onclick = null;
+        }
+      }
+
       if (!canDraw) {
         noteEl.textContent = "You’re all set! A confirmation email has been sent.";
       } else {

@@ -72,3 +72,21 @@ button.secondary {
 button.secondary[disabled] {
     background: #a0aec0;
 }
+
+/* Green (success) button */
+button.btn-green {
+  background: #059669;        /* emerald-600 */
+  border-color: #047857;
+  color: #fff;
+}
+button.btn-green:hover {
+  background: #047857;        /* emerald-700 */
+  border-color: #065f46;
+}
+button.btn-green:active {
+  transform: translateY(1px);
+}
+button.btn-green[disabled] {
+  opacity: .6;
+  cursor: not-allowed;
+}

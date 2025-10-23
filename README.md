@@ -10,9 +10,10 @@ curl -X POST http://localhost:3000/api/admin/seed \
   "secret": "admin-secret",
   "eventName": "Wong's Christmas 2025",
   "participants": [
-    {"name":"stephen1","email":"chen.stephen151@gmail.com"},
+    {"name":"Stephen","email":"chen.stephen151@gmail.com"},
     {"name":"Liezel","email":"liezel@example.com"},
-    {"name":"Clarisse","email":"clarisse@example.com"}
+    {"name":"Clarisse","email":"clarisse@example.com"},
+    {"name":"Hana","email":"hana@example.com"}
   ],
   "tiers": [
     { "name": "Gift 1", "budgetCents": 10000 },
@@ -30,6 +31,11 @@ curl -X POST http://localhost:3000/api/admin/send-invites \
 curl -X POST http://localhost:3000/api/admin/send-wishlists \
   -H "Content-Type: application/json" \
   -d '{"secret":"admin-secret","eventId":"3b92880f-1457-4243-a008-60fe58f833aa"}'
+
+curl -X POST http://localhost:3000/api/admin/event/update \
+  -H "Content-Type: application/json" \
+  -d '{"secret":"admin-secret", "eventDate": "2025-12-25T18:00:00+10:30", "location": "50 Tasman Avenue, Gilles Plains", "eventId":"1cfbd7a4-7cd7-47ce-b3cc-7c3d595bb2c8"}'
+
 ______________________________________________________________________________________________________________________________________________________________________________
 
 3. Each Recipients do the draw:
@@ -66,7 +72,6 @@ JSON
 curl -X POST https://kris-kringle.onrender.com/api/admin/send-invites \
   -H "Content-Type: application/json" \
   -d '{"secret":"<ADMIN_SECRET>","eventId":"a1679b20-48b6-466b-a50a-2f4fa317b736"}'
-
 
 
 RESET:

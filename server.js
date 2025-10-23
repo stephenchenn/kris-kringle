@@ -21,6 +21,8 @@ CREATE TABLE IF NOT EXISTS events (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
   gifts_per_person INTEGER NOT NULL CHECK (gifts_per_person > 0),
+  event_date TEXT,
+  location TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -108,6 +110,19 @@ CREATE INDEX IF NOT EXISTS idx_wishlist_items_wl ON wishlist_items(wishlist_id);
 CREATE INDEX IF NOT EXISTS idx_wishlist_items_reserved ON wishlist_items(reserved_by);
 `);
 
+// --- Safe migration: add date & location to events if missing ---
+(function migrateEventsTable() {
+  const cols = db.prepare(`PRAGMA table_info(events)`).all();
+  const names = new Set(cols.map(c => c.name));
+
+  if (!names.has('event_date')) {
+    db.exec(`ALTER TABLE events ADD COLUMN event_date TEXT`); // nullable
+  }
+  if (!names.has('location')) {
+    db.exec(`ALTER TABLE events ADD COLUMN location TEXT`);   // nullable
+  }
+})();
+
 // --- Email transport ---
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST,
@@ -135,7 +150,8 @@ function getParticipantByToken(token) {
 function requireMeByToken(token) {
   if (!token) return null;
   return db.prepare(`
-    SELECT p.id AS pid, p.name AS pname, p.email, p.event_id, e.name AS ename
+    SELECT p.id AS pid, p.name AS pname, p.email, p.event_id,
+      e.name AS ename, e.event_date AS edate, e.location AS elocation
     FROM participants p
     JOIN events e ON e.id = p.event_id
     WHERE p.invite_token = ?
@@ -261,7 +277,7 @@ app.get("/api/me", (req, res) => {
   // who am I + event
   const meRow = db.prepare(`
     SELECT p.id, p.name, p.email, p.has_drawn, p.event_id,
-           e.name AS event_name
+          e.name AS event_name, e.event_date, e.location
     FROM participants p
     JOIN events e ON e.id = p.event_id
     WHERE p.invite_token = ?
@@ -303,7 +319,7 @@ app.get("/api/me", (req, res) => {
 
   return res.json({
     me: { id: meRow.id, name: meRow.name, email: meRow.email, has_drawn: Boolean(meRow.has_drawn) },
-    event: { id: meRow.event_id, name: meRow.event_name, tiers: tiers.map(t => ({ id: t.id, name: t.name, budget_cents: t.budget_cents })) },
+    event: { id: meRow.event_id, name: meRow.event_name, date: meRow.event_date || null, location: meRow.location || null, tiers: tiers.map(t => ({ id: t.id, name: t.name, budget_cents: t.budget_cents })) },
     recipients_by_tier,
   });
 });
@@ -412,14 +428,26 @@ function derange(ids) {
 }
 
 app.post("/api/admin/seed", (req, res) => {
-  const { secret, eventName, giftsPerPerson, participants, tiers } = req.body || {};
-  if (secret !== process.env.ADMIN_SECRET) return res.status(403).json({ error: "Forbidden" });
+  const {
+    secret,
+    eventName,
+    giftsPerPerson,
+    participants,
+    tiers,
+    // 👇 NEW: allow optional event meta
+    eventDate,   // e.g. "2025-12-20" or ISO
+    location     // e.g. "123 Candy Cane Ln, North Pole"
+  } = req.body || {};
 
+  if (secret !== process.env.ADMIN_SECRET) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
   if (!eventName) return res.status(400).json({ error: "Missing eventName" });
+
   const people = Array.isArray(participants) ? participants : [];
   if (people.length < 2) return res.status(400).json({ error: "Need at least 2 participants" });
 
-  // tiers: if not provided, fall back to giftsPerPerson (uniform, no budgets)
+  // Build tiers (same as before)
   let tierDefs = [];
   if (Array.isArray(tiers) && tiers.length > 0) {
     tierDefs = tiers.map((t, i) => ({
@@ -440,7 +468,11 @@ app.post("/api/admin/seed", (req, res) => {
   }
 
   const eventId = randomUUID();
-  const insertEvent = db.prepare(`INSERT INTO events (id, name, gifts_per_person) VALUES (?,?,?)`);
+
+  const insertEvent = db.prepare(`
+    INSERT INTO events (id, name, gifts_per_person, event_date, location)
+    VALUES (?,?,?,?,?)
+  `);
   const insertParticipant = db.prepare(`
     INSERT INTO participants (id, event_id, name, email, invite_token)
     VALUES (?,?,?,?,?)
@@ -455,9 +487,16 @@ app.post("/api/admin/seed", (req, res) => {
   `);
 
   const tx = db.transaction(() => {
-    insertEvent.run(eventId, eventName, tierDefs.length);
+    // 👇 FIX: use eventDate/location from body (or null)
+    insertEvent.run(
+      eventId,
+      eventName,
+      tierDefs.length,
+      eventDate || null,
+      location || null
+    );
 
-    // add participants
+    // participants
     const pRows = [];
     for (const p of people) {
       const pid = randomUUID();
@@ -466,37 +505,34 @@ app.post("/api/admin/seed", (req, res) => {
       pRows.push({ id: pid, name: p.name, email: p.email, token });
     }
 
-    // add tiers
+    // tiers
     for (const t of tierDefs) {
       insertTier.run(t.id, eventId, t.name, t.budget_cents, t.sort_order);
     }
 
-    // PREASSIGN: build one derangement per tier
-    // Ensure a giver doesn't get the SAME recipient across different tiers
-    const giverIds = pRows.map((p) => p.id);
-    const alreadyForGiver = new Map(giverIds.map((g) => [g, new Set()]));
-
+    // assignments (unchanged)
+    const giverIds = pRows.map(p => p.id);
+    const alreadyForGiver = new Map(giverIds.map(g => [g, new Set()]));
     for (const t of tierDefs) {
       let perm;
-      // Try derangements until they also avoid duplicates across tiers for a giver
       attempt: for (let tries = 0; tries < 200; tries++) {
-        perm = derange(giverIds);
-        // verify cross-tier distinct recipients for each giver
-        for (let i = 0; i < giverIds.length; i++) {
-          const giver = giverIds[i];
-          const recip = perm[i];
-          if (alreadyForGiver.get(giver).has(recip)) {
-            continue attempt; // try another derangement
-          }
+        // derange
+        const a = giverIds.slice();
+        for (let i = a.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [a[i], a[j]] = [a[j], a[i]];
         }
-        break; // good perm
+        // no self
+        if (a.some((v, i) => v === giverIds[i])) continue attempt;
+        // avoid duplicate recipients across tiers
+        for (let i = 0; i < giverIds.length; i++) {
+          if (alreadyForGiver.get(giverIds[i]).has(a[i])) continue attempt;
+        }
+        perm = a; break;
       }
-      // Insert assignments & record recipient per giver
       for (let i = 0; i < giverIds.length; i++) {
-        const giver = giverIds[i];
-        const recip = perm[i];
-        insertAssignment.run(randomUUID(), eventId, t.id, giver, recip);
-        alreadyForGiver.get(giver).add(recip);
+        insertAssignment.run(randomUUID(), eventId, t.id, giverIds[i], perm[i]);
+        alreadyForGiver.get(giverIds[i]).add(perm[i]);
       }
     }
 
@@ -514,17 +550,22 @@ app.post("/api/admin/seed", (req, res) => {
     ? `${req.get("x-forwarded-proto")}://${req.get("x-forwarded-host")}`
     : (process.env.BASE_URL || "http://localhost:3000");
 
-  const invites = inserted.map((r) => ({
-    name: r.name,
-    email: r.email,
-    link: `${base}/draw?token=${r.token}`,
-  }));
-
   res.json({
-    event: { id: eventId, name: eventName, tiers: tierDefs.map(t => ({ id: t.id, name: t.name, budget_cents: t.budget_cents })) },
-    invites,
+    event: {
+      id: eventId,
+      name: eventName,
+      event_date: eventDate || null,   // 👈 include in response (optional)
+      location: location || null,      // 👈 include in response (optional)
+      tiers: tierDefs.map(t => ({ id: t.id, name: t.name, budget_cents: t.budget_cents })),
+    },
+    invites: inserted.map(r => ({
+      name: r.name,
+      email: r.email,
+      link: `${base}/draw?token=${r.token}`,
+    })),
   });
 });
+
 
 app.post("/api/admin/send-invites", async (req, res) => {
   const { secret, eventId } = req.body || {};
@@ -672,6 +713,25 @@ app.post("/api/admin/send-wishlists", async (req, res) => {
   }
 
   return res.json({ ok: true, sent, failed });
+});
+
+app.post('/api/admin/event/update', (req, res) => {
+  const { secret, eventId, eventDate, location } = req.body || {};
+  if (secret !== process.env.ADMIN_SECRET) return res.status(403).json({ error: 'Forbidden' });
+
+  // default to most recent if not provided
+  const evt = eventId || db.prepare(`SELECT id FROM events ORDER BY created_at DESC LIMIT 1`).get()?.id;
+  if (!evt) return res.status(404).json({ error: 'No event found' });
+
+  db.prepare(`
+    UPDATE events
+    SET event_date = COALESCE(?, event_date),
+        location   = COALESCE(?, location)
+    WHERE id = ?
+  `).run(eventDate || null, location || null, evt);
+
+  const out = db.prepare(`SELECT id, name, event_date, location FROM events WHERE id = ?`).get(evt);
+  res.json({ ok: true, event: out });
 });
 
 
@@ -892,6 +952,14 @@ app.get('/api/wishlists/all', (req, res) => {
   const me = requireMeByToken(req.query.token);
   if (!me) return res.status(401).json({ error: 'invalid token' });
 
+  // also fetch my draw status + token
+  const meExtra = db.prepare(`
+    SELECT has_drawn, invite_token
+    FROM participants
+    WHERE id = ?
+  `).get(me.pid) || { has_drawn: 0, invite_token: null };
+
+
   const people = db.prepare(`
     SELECT id, name FROM participants
     WHERE event_id = ?
@@ -938,10 +1006,38 @@ app.get('/api/wishlists/all', (req, res) => {
     ORDER BY sort_order
   `).all(me.event_id);
 
+  // Build recipients_by_tier for the current user
+  let recipients_by_tier = tiers.map(t => ({
+    tier_id: t.id,
+    name: t.name,
+    budget_cents: t.budget_cents,
+    recipient: null
+  }));
+  if (meExtra.has_drawn) {
+    const rows = db.prepare(`
+     SELECT a.tier_id, r.name AS recipient_name
+     FROM assignments a
+     JOIN participants r ON r.id = a.recipient_id
+     WHERE a.event_id = ? AND a.giver_id = ?
+   `).all(me.event_id, me.pid);
+    recipients_by_tier = tiers.map(t => ({
+      tier_id: t.id,
+      name: t.name,
+      budget_cents: t.budget_cents,
+      recipient: (rows.find(r => r.tier_id === t.id) || {}).recipient_name || null,
+    }));
+  }
+
   res.json({
-    me: { id: me.pid, name: me.pname },
-    event: { id: me.event_id, name: me.ename },
-    tiers: tiers.map(t => ({ id: t.id, name: t.name, budget_cents: t.budget_cents })), // 👈 add this
+    me: {
+      id: me.pid,
+      name: me.pname,
+      has_drawn: !!meExtra.has_drawn,
+      invite_token: meExtra.invite_token
+    },
+    event: { id: me.event_id, name: me.ename, date: me.edate, location: me.elocation },
+    tiers: tiers.map(t => ({ id: t.id, name: t.name, budget_cents: t.budget_cents })),
+    recipients_by_tier,
     allowed_owner_ids: Array.from(allowedOwnerIds),
     participants: people,
     wishlists: people.map(p => byOwner.get(p.id) || { owner: p, items: [] })

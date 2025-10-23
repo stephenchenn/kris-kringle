@@ -524,6 +524,20 @@
             padding-bottom: calc(var(--safe-bottom) + 32px);
             /* extra room at the bottom */
         }
+
+        #event-info .form-title {
+            margin-bottom: 6px;
+        }
+
+        #event-info strong {
+            font-weight: 600;
+        }
+
+.details {
+  margin-left: 6px;          /* shift the block a bit */
+  padding-left: 12px;        /* space before the text */
+  border-left: 3px solid #e5e7eb;  /* subtle guideline */
+}
     </style>
 </head>
 
@@ -535,6 +549,8 @@
 
     <!-- Greeting OUTSIDE the add box -->
     <p id="greeting" class="greeting" hidden></p>
+    <div id="event-info"></div>
+    <div id="draw-info"></div>
 
     <!-- Global add form -->
     <div id="addForm" class="add-wrap" hidden>
@@ -646,6 +662,15 @@
             return `$${(cents / 100).toFixed(0)}`;
         }
 
+        function fmtDate(s) {
+            if (!s) return '';
+            // Works for "YYYY-MM-DD" or full ISO; falls back safely
+            try {
+                const d = new Date(s);
+                if (isNaN(d)) return s;
+                return d.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
+            } catch { return s; }
+        }
 
         function makeField(id, labelText, controlEl) {
             const wrap = document.createElement('div'); wrap.className = 'field';
@@ -717,13 +742,103 @@
                 inPrice.title = '';
             }
 
-
-
             // Greeting outside the box
             const meName = data.me?.name || 'there';
             const eventName = data.event?.name || 'your event';
             greetEl.textContent = `Hi ${meName}! Welcome :)`;
             greetEl.hidden = false;
+
+            // After you set the greeting:
+            const infoHost = document.getElementById('event-info');
+            infoHost.innerHTML = ''; // reset
+
+            const evBox = document.createElement('div');
+            evBox.className = 'add-wrap'; // reuse your nice card style
+            evBox.style.marginTop = '8px';
+
+            const title = document.createElement('div');
+            title.className = 'form-title';
+            title.textContent = 'Event Info:';
+
+            const list = document.createElement('div');
+            list.className = 'details';              // add this line
+            list.style.display = 'grid';
+            list.style.rowGap = '6px';
+
+            const li1 = document.createElement('div');
+            li1.innerHTML = `<strong>Name:</strong> ${data.event?.name || '—'}`;
+
+            const li2 = document.createElement('div');
+            const d = data.event?.date ? fmtDate(data.event.date) : '';
+            li2.innerHTML = `<strong>Date:</strong> ${d || '—'}`;
+
+            const li3 = document.createElement('div');
+            li3.innerHTML = `<strong>Location:</strong> ${data.event?.location || '—'}`;
+
+            list.append(li1, li2, li3);
+            evBox.append(title, list);
+            infoHost.appendChild(evBox);
+
+            // Draw info under greeting
+            let drawHost = document.getElementById('draw-info');
+            drawHost.innerHTML = '';
+
+            const drawn = !!data.me?.has_drawn;
+            const rbt = Array.isArray(data.recipients_by_tier) ? data.recipients_by_tier : [];
+            const base = location.origin; // your BASE_URL
+            const myToken = data.me?.invite_token;
+
+            if (drawn && rbt.length > 0) {
+                const box = document.createElement('div');
+                box.className = 'add-wrap';
+                box.style.marginTop = '8px';
+
+                const title = document.createElement('div');
+                title.className = 'form-title';
+                title.textContent = "This year you've drawn:";
+
+                const list = document.createElement('div');
+                list.className = 'details';              // add this line
+                list.style.display = 'grid';
+                list.style.rowGap = '6px';
+
+                // helper to format budgets as whole dollars
+                const fmtWhole = (cents) => (typeof cents === 'number' && cents > 0) ? `$${(cents / 100).toFixed(0)}` : '';
+
+                for (const t of rbt) {
+                    const line = document.createElement('div');
+                    const budget = fmtWhole(t.budget_cents);
+                    const label = budget ? `${t.name} (${budget})` : t.name;
+                    line.innerHTML = `<strong>${label}:</strong> ${t.recipient || '—'}`;
+                    list.appendChild(line);
+                }
+
+                box.append(title, list);
+                drawHost.appendChild(box);
+            } else {
+                const warn = document.createElement('div');
+                warn.className = 'add-wrap';
+                warn.style.marginTop = '8px';
+                warn.style.borderColor = '#fecaca';
+                warn.style.background = '#fef2f2';
+                warn.style.color = '#991b1b';
+
+                const msg = document.createElement('div');
+                msg.style.marginBottom = '10px';
+                msg.style.whiteSpace = 'pre-line';
+                msg.textContent = `You haven't drawn your names yet.`;
+
+                const link = myToken ? `${base}/?token=${encodeURIComponent(myToken)}` : `${base}/`;
+
+                // Use the same button style as “Add to my wishlist”
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.textContent = 'Draw names now';
+                btn.onclick = () => { location.href = link; };
+
+                warn.append(msg, btn);
+                drawHost.appendChild(warn);
+            }
 
 
             // Show the add box
