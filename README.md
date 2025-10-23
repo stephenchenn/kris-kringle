@@ -9,6 +9,8 @@ curl -X POST http://localhost:3000/api/admin/seed \
 {
   "secret": "admin-secret",
   "eventName": "Wong's Christmas 2025",
+  "eventDate": "2025-12-25T18:00:00+10:30",
+  "location": "50 Tasman Avenue, Gilles Plains",
   "participants": [
     {"name":"Stephen","email":"chen.stephen151@gmail.com"},
     {"name":"Liezel","email":"liezel@example.com"},

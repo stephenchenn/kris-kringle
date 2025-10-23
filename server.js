@@ -986,6 +986,8 @@ app.get('/api/wishlists/all', (req, res) => {
     const bucket = byOwner.get(r.owner_id);
     if (!bucket) continue;
     if (r.item_id) {
+      // 🔒 Visibility rule: only givers to this owner can see the reserved state.
+      const canSee = allowedOwnerIds.has(r.owner_id); // A or B gifting to C -> canSee=true for C's items
       bucket.items.push({
         id: r.item_id,
         title: r.title,
@@ -993,8 +995,8 @@ app.get('/api/wishlists/all', (req, res) => {
         notes: r.notes,
         price_cents: r.price_cents,
         image_url: r.image_url,
-        is_reserved: r.is_reserved,
-        reserved_by_me: r.reserved_by_me,  // 👈 new
+        is_reserved: canSee ? r.is_reserved : 0,
+        reserved_by_me: canSee ? r.reserved_by_me : 0,
       });
     }
   }
