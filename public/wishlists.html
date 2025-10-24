@@ -533,11 +533,66 @@
             font-weight: 600;
         }
 
-#event-info .details {
-  margin-left: 6px;          /* shift the block a bit */
-  padding-left: 12px;        /* space before the text */
-  border-left: 3px solid #e5e7eb; /* subtle guideline */
-}
+        /* CSS */
+        #btn_toggle_add {
+            appearance: none;
+            backface-visibility: hidden;
+            background-color: #27ae60;
+            border-radius: 8px;
+            border-style: none;
+            box-shadow: rgba(39, 174, 96, .15) 0 4px 9px;
+            box-sizing: border-box;
+            color: #fff;
+            cursor: pointer;
+            display: inline-block;
+            font-family: Inter, -apple-system, system-ui, "Segoe UI", Helvetica, Arial, sans-serif;
+            font-size: 13px;
+            font-weight: 600;
+            letter-spacing: normal;
+            line-height: 1.5;
+            outline: none;
+            overflow: hidden;
+            padding: 10px 12px;
+            position: relative;
+            text-align: center;
+            text-decoration: none;
+            transform: translate3d(0, 0, 0);
+            transition: all .3s;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+            vertical-align: top;
+            white-space: nowrap;
+        }
+
+        #btn_toggle_add:hover {
+            background-color: #1e8449;
+            opacity: 1;
+            transform: translateY(0);
+            transition-duration: .35s;
+        }
+
+        #btn_toggle_add:active {
+            transform: translateY(2px);
+            transition-duration: .35s;
+        }
+
+        #btn_toggle_add:hover {
+            box-shadow: rgba(39, 174, 96, .2) 0 6px 12px;
+        }
+
+        #event-info .details {
+            margin-left: 6px;
+            /* shift the block a bit */
+            padding-left: 12px;
+            /* space before the text */
+            border-left: 3px solid #e5e7eb;
+            /* subtle guideline */
+        }
+
+        #addToggleRow {
+            justify-content: flex-end;
+        }
 
         /* thin divider used inside info card */
         .divider {
@@ -545,6 +600,11 @@
             background: #e5e7eb;
             margin: 12px 0;
             border-radius: 9999px;
+        }
+
+        #addForm.add-wrap {
+            background: linear-gradient(180deg, #f0fdf4 0%, #ecfdf5 100%);
+            border-color: #a7f3d0;
         }
     </style>
 </head>
@@ -559,6 +619,12 @@
     <p id="greeting" class="greeting" hidden></p>
     <div id="event-info"></div>
     <div id="draw-info"></div>
+
+    <!-- Toggle for add form -->
+    <div id="addToggleRow" class="row" hidden>
+        <!-- <button id="btn_toggle_add" type="button">Add an item</button> -->
+        <button id="btn_toggle_add" role="button">Add an item</button>
+    </div>
 
     <!-- Global add form -->
     <div id="addForm" class="add-wrap" hidden>
@@ -602,6 +668,10 @@
         const inNotes = document.getElementById('f_notes');
         const btnAdd = document.getElementById('btn_add');
         const msgAdd = document.getElementById('msg_add');
+
+        // Show-once add form toggle
+        const toggleRow = document.getElementById('addToggleRow');
+        const btnToggleAdd = document.getElementById('btn_toggle_add');
 
         function fmtPrice(cents) { return (cents == null || isNaN(cents)) ? '' : `$${(cents / 100).toFixed(2)}`; }
         function centsFromPrice(p) {
@@ -768,10 +838,10 @@
             title1.textContent = 'Event Info:';
 
             const list1 = document.createElement('div');
-list1.className = 'details';
+            list1.className = 'details';
             list1.style.display = 'grid';
             list1.style.rowGap = '6px';
-            
+
 
             const li1 = document.createElement('div');
             li1.innerHTML = `<strong>Name:</strong> ${data.event?.name || '—'}`;
@@ -845,8 +915,18 @@ list1.className = 'details';
 
             infoHost.appendChild(card);
 
-            // Show the add box
-            addWrap.hidden = false;
+            // Show the reveal button; keep form hidden until clicked
+            toggleRow.hidden = false;
+            addWrap.hidden = true;
+            btnToggleAdd.onclick = () => {
+                const willShow = addWrap.hidden;
+                addWrap.hidden = !willShow;
+                btnToggleAdd.textContent = 'Add an item';
+                btnToggleAdd.setAttribute('aria-expanded', String(willShow));
+                if (willShow) {
+                    inTitle?.focus?.();
+                }
+            };
 
             // Continue as before…
             renderAll(data);
@@ -878,9 +958,20 @@ list1.className = 'details';
             root.innerHTML = '';
             const meId = data.me?.id;
             const allowed = new Set(data.allowed_owner_ids || []);
-            const collapsedMap = loadCollapsedMap(); // 👈 load saved states
+            const collapsedMap = loadCollapsedMap();
 
-            data.wishlists.forEach(({ owner, items }) => {
+            // Ensure my card is first
+            const ordered = Array.isArray(data.wishlists)
+                ? data.wishlists.slice().sort((a, b) => {
+                    const aIsMe = a?.owner?.id === meId;
+                    const bIsMe = b?.owner?.id === meId;
+                    if (aIsMe === bIsMe) return 0;   // keep relative order for others
+                    return aIsMe ? -1 : 1;          // my card first
+                })
+                : [];
+
+            ordered.forEach(({ owner, items }) => {
+
                 const card = document.createElement('div'); card.className = 'card';
 
                 // Header with name/pill on left, collapse on right
@@ -972,7 +1063,6 @@ list1.className = 'details';
                             bar.append(edit, del);
                             box.appendChild(bar);
 
-                            // Inline edit form (hidden by default)
                             // Inline edit form (hidden by default)
                             const editForm = document.createElement('div');
                             editForm.className = 'edit-row';
