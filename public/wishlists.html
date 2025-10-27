@@ -633,7 +633,7 @@
         </div>
         <div class="input-row">
             <input id="f_image" class="input half" placeholder="Image URL (optional)" />
-            <textarea id="f_notes" class="input half input" rows="2" placeholder="Notes (size, color, etc.)"></textarea>
+            <textarea id="f_notes" class="input half input" rows="2" style="font-family: Arial;" placeholder="Notes (size, color, etc.)"></textarea>
         </div>
         <div class="row">
             <button id="btn_add">Add to my wishlist</button>
@@ -991,6 +991,16 @@
                 const left = document.createElement('div'); left.className = 'left';
                 const nameEl = document.createElement('div'); nameEl.className = 'owner'; nameEl.textContent = owner.name;
                 left.appendChild(nameEl);
+
+                // 🎁 only if this owner is MY recipient
+                if (allowed.has(owner.id) && owner.id !== meId) {
+                    const giftEl = document.createElement('span');
+                    giftEl.className = 'gift-emoji';
+                    giftEl.textContent = '\uD83C\uDF81'; // &#127873;
+                    giftEl.setAttribute('aria-label', 'Your recipient');
+                    left.appendChild(giftEl);
+                }
+
                 if (owner.id === meId) {
                     const pill = document.createElement('span'); pill.className = 'pill gray'; pill.textContent = 'you';
                     left.appendChild(pill);
