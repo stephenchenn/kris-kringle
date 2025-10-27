@@ -847,15 +847,15 @@ app.put('/api/wishlist/item/:id', (req, res) => {
   if (row.owner_id !== me.pid) return res.status(403).json({ error: 'forbidden' });
 
   db.prepare(`
-    UPDATE wishlist_items SET
-      title       = COALESCE(?, title),
-      url         = COALESCE(?, url),
-      notes       = COALESCE(?, notes),
-      price_cents = COALESCE(?, price_cents),
-      image_url   = COALESCE(?, image_url),
-      updated_at  = datetime('now')
-    WHERE id = ?
-  `).run(
+  UPDATE wishlist_items SET
+    title       = ?,
+    url         = ?,
+    notes       = ?,
+    price_cents = ?,
+    image_url   = ?,
+    updated_at  = datetime('now')
+  WHERE id = ?
+`).run(
     title || null,
     url || null,
     notes || null,
@@ -863,6 +863,7 @@ app.put('/api/wishlist/item/:id', (req, res) => {
     image_url || null,
     id
   );
+
 
   const updated = db.prepare(`SELECT * FROM wishlist_items WHERE id=?`).get(id);
   res.json({ ok: true, item: updated });

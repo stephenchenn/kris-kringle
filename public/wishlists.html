@@ -601,11 +601,6 @@
             margin: 12px 0;
             border-radius: 9999px;
         }
-
-        #addForm.add-wrap {
-            background: linear-gradient(180deg, #f0fdf4 0%, #ecfdf5 100%);
-            border-color: #a7f3d0;
-        }
     </style>
 </head>
 
@@ -798,27 +793,29 @@
             const h1 = document.querySelector('h1');
             if (h1) h1.textContent = `${eventNamePretty} Wishlists`;
 
-            // Build: "Budgets are $50 for Gift 1 or $25 for Gift 2"
-            const tiers = Array.isArray(data.tiers) ? data.tiers : [];
-            const pieces = tiers.map(t => {
-                const b = fmtWholeDollars(t.budget_cents);
-                return b ? `${b} for ${t.name}` : null;
-            }).filter(Boolean);
+            inPrice.placeholder = "Price";
 
-            if (pieces.length > 0) {
-                const budgetsText = joinWithOr(pieces);
-                inPrice.placeholder = `Gift Price (Budgets are ${budgetsText})`;
-                inPrice.title = `Budgets are ${budgetsText}`;
-            } else if (tiers.length > 0) {
-                // No budgets set, just show tier names
-                const names = joinWithOr(tiers.map(t => t.name));
-                inPrice.placeholder = `Gift Price (${names})`;
-                inPrice.title = names;
-            } else {
-                // Fallback
-                inPrice.placeholder = 'Gift Price (e.g. 49.99)';
-                inPrice.title = '';
-            }
+            // // Build: "Budgets are $50 for Gift 1 or $25 for Gift 2"
+            // const tiers = Array.isArray(data.tiers) ? data.tiers : [];
+            // const pieces = tiers.map(t => {
+            //     const b = fmtWholeDollars(t.budget_cents);
+            //     return b ? `${b} for ${t.name}` : null;
+            // }).filter(Boolean);
+
+            // if (pieces.length > 0) {
+            //     const budgetsText = joinWithOr(pieces);
+            //     inPrice.placeholder = `Gift Price (Budgets are ${budgetsText})`;
+            //     inPrice.title = `Budgets are ${budgetsText}`;
+            // } else if (tiers.length > 0) {
+            //     // No budgets set, just show tier names
+            //     const names = joinWithOr(tiers.map(t => t.name));
+            //     inPrice.placeholder = `Gift Price (${names})`;
+            //     inPrice.title = names;
+            // } else {
+            //     // Fallback
+            //     inPrice.placeholder = 'Gift Price (e.g. 49.99)';
+            //     inPrice.title = '';
+            // }
 
             // Greeting outside the box (unchanged)
             const meName = data.me?.name || 'there';
@@ -832,63 +829,78 @@
             card.className = 'add-wrap';
             card.style.marginTop = '8px';
 
-            // ----- Event Info (top half) -----
-            const title1 = document.createElement('div');
-            title1.className = 'form-title';
-            title1.textContent = 'Event Info:';
+            // helpers
+            const addLine = (text, indent = 0, isBold = false) => {
+                const line = document.createElement('div');
+                line.style.marginLeft = `${indent * 16}px`;
+                line.style.lineHeight = '1.4';
+                if (isBold) {
+                    const b = document.createElement('strong');
+                    b.textContent = text;
+                    line.appendChild(b);
+                } else {
+                    line.textContent = text;
+                }
+                card.appendChild(line);
+            };
 
-            const list1 = document.createElement('div');
-            list1.className = 'details';
-            list1.style.display = 'grid';
-            list1.style.rowGap = '6px';
+            const addLabelValue = (label, value, indent = 0) => {
+                const line = document.createElement('div');
+                line.style.marginLeft = `${indent * 16}px`;
+                line.style.lineHeight = '1.4';
 
+                const strong = document.createElement('strong');
+                strong.textContent = `${label}: `;
 
-            const li1 = document.createElement('div');
-            li1.innerHTML = `<strong>Name:</strong> ${data.event?.name || '—'}`;
+                const span = document.createElement('span');
+                span.textContent = value;
 
-            const li2 = document.createElement('div');
-            const d = data.event?.date ? fmtDate(data.event.date) : '';
-            li2.innerHTML = `<strong>Date:</strong> ${d || '—'}`;
+                line.append(strong, span);
+                card.appendChild(line);
+            };
 
-            const li3 = document.createElement('div');
-            li3.innerHTML = `<strong>Location:</strong> ${data.event?.location || '—'}`;
+            // ----- Event Info -----
+            addLine('Event Info:', 0, true);
 
-            list1.append(li1, li2, li3);
-            card.append(title1, list1);
+            const name = data.event?.name || '—';
+            addLabelValue('Name', name, 1);
 
-            // divider
-            const divider = document.createElement('div');
-            divider.className = 'divider';
-            card.appendChild(divider);
+            const d = data.event?.date ? fmtDate(data.event.date) : '—';
+            addLabelValue('Date', d, 1);
 
-            // ----- Draw Info (bottom half) -----
+            const loc = data.event?.location || '—';
+            addLabelValue('Location', loc, 1);
+
+            // ----- Draw Info -----
             const drawn = !!data.me?.has_drawn;
             const rbt = Array.isArray(data.recipients_by_tier) ? data.recipients_by_tier : [];
             const base = location.origin;
             const myToken = data.me?.invite_token;
 
             if (drawn && rbt.length > 0) {
-                const title2 = document.createElement('div');
-                title2.className = 'form-title';
-                title2.textContent = "This year you've drawn:";
-
-                const list2 = document.createElement('div');
-                list2.className = 'details';
-                list2.style.display = 'grid';
-                list2.style.rowGap = '6px';
+                // Bold the whole header line
+                addLine(`Your Recipients:`, 1, true);
 
                 const fmtWhole = (cents) =>
                     (typeof cents === 'number' && cents > 0) ? `$${(cents / 100).toFixed(0)}` : '';
 
                 for (const t of rbt) {
-                    const line = document.createElement('div');
                     const budget = fmtWhole(t.budget_cents);
-                    const label = budget ? `${t.name} (${budget})` : t.name;
-                    line.innerHTML = `<strong>${label}:</strong> ${t.recipient || '—'}`;
-                    list2.appendChild(line);
-                }
+                    const label = budget ? `${t.name} (${budget})` : t.name; // e.g., "Gift 1 ($100)"
+                    // Bold the gift label, normal recipient
+                    const line = document.createElement('div');
+                    line.style.marginLeft = `${2 * 16}px`;
+                    line.style.lineHeight = '1.4';
 
-                card.append(title2, list2);
+                    const strong = document.createElement('strong');
+                    strong.textContent = `${label}: `;
+
+                    const span = document.createElement('span');
+                    span.textContent = t.recipient || '—';
+
+                    line.append(strong, span);
+                    card.appendChild(line);
+                }
             } else {
                 const warn = document.createElement('div');
                 warn.style.marginTop = '4px';
@@ -1075,7 +1087,7 @@
                             const inNotesE = document.createElement('textarea'); inNotesE.className = 'input'; inNotesE.rows = 2; inNotesE.placeholder = 'Notes'; inNotesE.value = it.notes || '';
 
                             const actions = document.createElement('div'); actions.className = 'edit-actions';
-                            const saveBtn = document.createElement('button'); saveBtn.className = 'btn-lite'; saveBtn.textContent = 'Update';
+                            const saveBtn = document.createElement('button'); saveBtn.className = 'btn-lite'; saveBtn.style = 'background-color: #27ae60; color: white;'; saveBtn.textContent = 'Update';
                             const cancelBtn = document.createElement('button'); cancelBtn.className = 'btn-lite'; cancelBtn.textContent = 'Cancel';
                             const msg = document.createElement('span'); msg.className = 'muted';
 
