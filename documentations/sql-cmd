@@ -75,6 +75,8 @@ JOIN participants g ON g.id = a.giver_id
 GROUP BY g.id
 ORDER BY total_giving DESC, g.name;
 
+-- Which gift has been reserved
+SELECT title, price_cents FROM wishlist_items WHERE reserved_by IS NOT NULL;
 
 .quit
 .shell clear

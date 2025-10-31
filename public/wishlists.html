@@ -176,16 +176,25 @@
         /* collapse */
         .collapse {
             overflow: hidden;
-            transition: max-height 0.25s ease;
+            transition: max-height .25s ease;
         }
 
         .collapse.collapsed {
             max-height: 0;
         }
 
+        /* final state has no cap so long lists never clip */
         .collapse.expanded {
-            max-height: 2000px;
+            max-height: none;
         }
+
+        /* smoother animation on some browsers */
+        .collapse.expanding,
+        .collapse.collapsing {
+            will-change: max-height;
+        }
+
+
 
         .btn-link {
             background: transparent;
@@ -633,7 +642,8 @@
         </div>
         <div class="input-row">
             <input id="f_image" class="input half" placeholder="Image URL (optional)" />
-            <textarea id="f_notes" class="input half input" rows="2" style="font-family: Arial;" placeholder="Notes (size, color, etc.)"></textarea>
+            <textarea id="f_notes" class="input half input" rows="2" style="font-family: Arial;"
+                placeholder="Notes (size, color, etc.)"></textarea>
         </div>
         <div class="row">
             <button id="btn_add">Add to my wishlist</button>
@@ -759,6 +769,62 @@
             // Uppercase first letter after start/space/hyphen; preserves apostrophes (won't make Wong'S)
             return s.toLowerCase().replace(/(^|\s|-)([a-z])/g, (_, sep, c) => sep + c.toUpperCase());
         }
+
+        function expand(panel) {
+            // Remove fixed states
+            panel.classList.remove('collapsed');
+            panel.classList.add('expanding');
+
+            // Start from 0px so the transition has a real start value
+            panel.style.maxHeight = '0px';
+
+            // Next frame: set to the content height so it animates
+            requestAnimationFrame(() => {
+                const target = panel.scrollHeight;
+                panel.style.maxHeight = target + 'px';
+
+                const done = () => {
+                    panel.removeEventListener('transitionend', done);
+                    clearTimeout(fallback);
+                    panel.classList.remove('expanding');
+                    panel.classList.add('expanded');
+                    panel.style.maxHeight = 'none'; // release the cap
+                };
+                panel.addEventListener('transitionend', done);
+
+                // Fallback in case transitionend is swallowed
+                const fallback = setTimeout(done, 350);
+            });
+        }
+
+        function collapse(panel) {
+            // From expanded (max-height: none), set a pixel height first
+            panel.classList.remove('expanded');
+            panel.classList.add('collapsing');
+
+            // Set current height so we can animate down from it
+            const start = panel.scrollHeight;
+            panel.style.maxHeight = start + 'px';
+
+            // Next frame: animate to 0
+            requestAnimationFrame(() => {
+                panel.style.maxHeight = '0px';
+
+                const done = () => {
+                    panel.removeEventListener('transitionend', done);
+                    clearTimeout(fallback);
+                    panel.classList.remove('collapsing');
+                    panel.classList.add('collapsed');
+                    panel.style.maxHeight = ''; // clean up
+                };
+                panel.addEventListener('transitionend', done);
+
+                // Fallback in case transitionend doesn’t fire
+                const fallback = setTimeout(done, 350);
+            });
+        }
+
+
 
 
         btnAdd?.addEventListener('click', async () => {
@@ -1017,6 +1083,11 @@
                 panel.id = sectionId;
                 const wasCollapsed = (collapsedMap[owner.id] !== undefined) ? !!collapsedMap[owner.id] : true; // 👈 default collapsed
                 panel.className = `collapse ${wasCollapsed ? 'collapsed' : 'expanded'}`;
+                if (!wasCollapsed) {
+                    panel.className = 'collapse expanded';
+                    panel.style.maxHeight = 'none';
+                }
+
                 card.appendChild(panel);
 
                 if (count > 0) {
@@ -1043,22 +1114,26 @@
 
                     toggle.append(chev, label, badge);
 
-                    // Toggle behavior
                     toggle.onclick = () => {
-                        const nowCollapsed = panel.classList.contains('expanded'); // we’ll flip
-                        panel.classList.toggle('expanded', !nowCollapsed);
-                        panel.classList.toggle('collapsed', nowCollapsed);
+                        const isExpanded = panel.classList.contains('expanded');
 
-                        // save new state
+                        if (isExpanded) {
+                            collapse(panel);
+                        } else {
+                            expand(panel);
+                        }
+
+                        // save new state (true means collapsed)
                         const map = loadCollapsedMap();
-                        map[owner.id] = nowCollapsed;
+                        map[owner.id] = isExpanded;      // we just collapsed if it WAS expanded
                         saveCollapsedMap(map);
 
                         // update UI
-                        toggle.setAttribute('aria-expanded', String(!nowCollapsed));
-                        label.textContent = (!nowCollapsed) ? 'Collapse' : 'Expand';
-                        chev.classList.toggle('expanded', !nowCollapsed);
+                        toggle.setAttribute('aria-expanded', String(!isExpanded));
+                        label.textContent = (!isExpanded) ? 'Collapse' : 'Expand';
+                        chev.classList.toggle('expanded', !isExpanded);
                     };
+
 
                     right.appendChild(toggle);
 
