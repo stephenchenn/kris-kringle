@@ -31,59 +31,78 @@ curl --fail https://kris-kringle.onrender.com/healthz
 It should return `ok`. The home page without a personal token shows “Invalid or
 missing invite link”; participants need their individual invitation links.
 
-If Render accepts resume but the service stays suspended, check workspace
-Billing. This account's payment method was removed in February 2026; that
-separate suspension must be resolved before the service can run or accept SSH.
+The service was restored on 31 October 2026 after its payment method was added
+again. Last year's data was backed up on Render and locally before deploying
+the fixes. If a future resume leaves it suspended, check workspace Billing.
 
-## Keep the existing SendGrid integration
+## Free email without SendGrid or a paid domain
 
-Render already has the SendGrid host, port, username, API key, and sender
-configured. Keep that integration; a Gmail SMTP migration is unnecessary.
-The existing API key was accepted by SendGrid's read-only account APIs when
-checked on 31 October 2026. The SMTP check on SendGrid's alternative port 2525
-then returned `451 Authentication failed: Maximum credits exceeded`. No email
-was sent. The account needs sending capacity restored before SMTP can work;
-API access alone does not establish that sending is enabled.
+Use a personal Gmail account directly over SMTP. The existing application
+already supports it, so no application code change is needed. Google sends
+from the Gmail address itself; you do not need to buy a sender domain or
+authenticate the expired domain with another email provider.
 
-Retain these Render environment settings:
+1. Enable [2-Step Verification](https://myaccount.google.com/security) on the
+   Google account you want to send from.
+2. Open [App passwords](https://myaccount.google.com/apppasswords) and create
+   one named `Family Kris Kringle`. Use this app password, not your normal
+   Google password. Some managed accounts, Advanced Protection accounts, and
+   accounts configured only with security keys do not offer app passwords.
+3. Open [Render's Environment tab](https://dashboard.render.com/web/srv-d3r0kut6ubrc738ahp20/env)
+   and replace the old SendGrid SMTP settings with:
 
 ```dotenv
 BASE_URL=https://kris-kringle.onrender.com
 DB_PATH=/data/db.sqlite
 EMAIL_MODE=smtp
-SMTP_HOST=smtp.sendgrid.net
+SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
-SMTP_USER=apikey
-SMTP_PASS=<SendGrid API key with Mail Send permission>
-FROM_EMAIL="Family Kris Kringle <your-verified-sender@example.com>"
+SMTP_USER=your-account@gmail.com
+SMTP_PASS=<Google app password>
+FROM_EMAIL="Family Kris Kringle <your-account@gmail.com>"
 ```
 
-`SMTP_USER` is literally `apikey`, not an email address. The application still
-defaults to SMTP when `EMAIL_MODE` is absent, so the current production settings
-remain compatible. See [SendGrid's SMTP settings](https://www.twilio.com/docs/sendgrid/for-developers/sending-email/integrating-with-the-smtp-api).
+Use exactly the same Gmail address in `SMTP_USER` and `FROM_EMAIL`. Keep the
+existing `BASE_URL`, `DB_PATH`, and admin secret. Enter the app password directly
+in Render; do not paste it into chat or tracked files. Save and deploy the
+environment changes. SMTP authentication can then be verified without sending
+any messages. A separate test invitation is still needed to check inbox delivery.
 
-The current sender is `noreply@mail.wongskringle.online`. SendGrid still lists
-that domain as authenticated, but its saved status does not establish that DNS
-authentication survives domain expiry. The free Render hostname is the website
-address; it does not provide a mailbox or DNS control for email authentication.
+Replace `your-account@gmail.com` with your actual Gmail address in both fields.
+In Render's individual value boxes, enter `FROM_EMAIL` without the outer double
+quotes shown in dotenv syntax, for example `Family Kris Kringle <your Gmail address>`.
+Paste the 16-character Google app password without its grouping spaces. Edited
+values do not take effect until you save the environment changes and deploy.
 
-To avoid buying a domain, open SendGrid → Settings → Sender Authentication →
-Single Sender Verification, add an address whose inbox you control, and follow
-the verification email. Then update only `FROM_EMAIL` to that verified address.
-SendGrid cautions that addresses from large mailbox providers can have DMARC
-delivery problems, so check delivery before sending the family invitations.
-See [Single Sender Verification](https://www.twilio.com/docs/sendgrid/ui/sending-email/sender-verification).
+Gmail's documented consumer sending limit is 500 messages per day; other account
+and recipient limits also apply. Seven invitations, seven draw confirmations,
+and occasional reminders are well below that limit for this family event.
+Google documents [SMTP settings](https://support.google.com/mail/answer/7104828),
+[app passwords](https://support.google.com/accounts/answer/185833), and
+[sending limits](https://support.google.com/mail/answer/22839).
 
-The account API currently reports a `free` account with zero total and remaining
-sending credits. Check SendGrid → Settings → Account Details → Your Products
-to restore an active sending plan. The old README recorded a trial ending in
-December 2025, and SendGrid's permanent free plan was retired; keeping the
-integration does not provide free sending. No paid plan has been purchased as
-part of this work. See [SendGrid's plan changes](https://www.twilio.com/en-us/changelog/sendgrid-free-plan).
+### Other free options
 
-Keep secrets directly in Render and the ignored `.env` file. Before going live,
-replace credentials that have been shared in screenshots. Render Free services
-block SMTP ports 465 and 587; the retained paid service supports this setup.
+| Option | Allowance / setup | Tradeoff |
+| --- | --- | --- |
+| Gmail SMTP | Existing personal account plus an app password | Recommended for this small annual event; sends from your Gmail address. |
+| Brevo Free | 300 emails per day; create an account and configure its SMTP credentials | Additional setup. Without your own authenticated domain, Brevo temporarily rewrites the sender address. |
+| Share invitation links manually | No email provider needed | Send each person only their own private link; automatic confirmations and email resends remain unavailable until SMTP works. |
+
+Brevo documents its [free allowance](https://help.brevo.com/hc/en-us/articles/208580669-FAQs-What-are-the-limits-of-the-Free-plan)
+and [sender rewriting](https://help.brevo.com/hc/en-us/articles/14925263522578-Comply-with-Gmail-Yahoo-and-Microsoft-s-requirements-for-email-senders).
+It describes rewriting as a temporary measure, so Gmail is the simpler option
+when you do not want a paid sender domain.
+
+Manual sharing works with the personal links returned by `/api/admin/seed`.
+Draws are saved before the app attempts a confirmation email, and wishlist
+access does not depend on email success. Keep links private: each grants access
+to that participant's account. SendGrid remains unusable with its current
+zero-credit account, but recovering it is not required for any of these options.
+
+The email options above are free; the retained Render compute and SQLite disk
+still have charges. Render Free blocks SMTP ports 465 and 587; the existing paid
+service supports them.
 
 ## Local demo and end-to-end tests
 

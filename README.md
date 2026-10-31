@@ -2,7 +2,7 @@
 
 Use the free Render hostname: https://kris-kringle.onrender.com.
 See [the 2026 setup guide](documentations/setup-2026.md) for hosting,
-SendGrid sender setup, backups, and creating this year's event.
+free email setup, backups, and creating this year's event.
 
 ```sh
 npm ci
