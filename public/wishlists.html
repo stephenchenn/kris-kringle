@@ -868,6 +868,10 @@
 
         async function loadAll() {
             const r = await fetch(`/api/wishlists/all?token=${encodeURIComponent(token)}`);
+            if (r.status === 403) {
+                location.replace(`/draw?token=${encodeURIComponent(token)}`);
+                return;
+            }
             const data = await r.json();
             if (!r.ok) { notice.textContent = data.error || 'Failed to load'; return; }
 
@@ -1219,9 +1223,7 @@
 
                             // Delete
                             del.onclick = async () => {
-                                const warn = it.is_reserved
-                                    ? 'This item is currently reserved. Deleting it will remove that reservation.\n\nDelete anyway?'
-                                    : 'Delete this item from your wishlist?';
+                                const warn = 'Delete this item from your wishlist?';
                                 if (!confirm(warn)) return;
                                 try { await deleteMyItem(it.id); await loadAll(); }
                                 catch (e) { notice.textContent = e.message || 'Could not delete'; }

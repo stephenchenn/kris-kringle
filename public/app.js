@@ -84,7 +84,7 @@
       }
 
       if (!canDraw) {
-        noteEl.textContent = "You’re all set! A confirmation email has been sent.";
+        noteEl.textContent = "You’re all set! Your recipients are saved. Use “Resend my email” if you need an email copy.";
       } else {
         noteEl.textContent = "";
       }

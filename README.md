@@ -1,3 +1,21 @@
+# Current setup (2026)
+
+Use the free Render hostname: https://kris-kringle.onrender.com.
+See [the 2026 setup guide](documentations/setup-2026.md) for hosting,
+SendGrid sender setup, backups, and creating this year's event.
+
+```sh
+npm ci
+npm test
+npm run test:e2e
+npm run demo
+```
+
+The demo prints five participant links and captures emails locally. It uses its
+own database under `.local/` and leaves last year's database untouched.
+
+## Historical notes (2025)
+
 LOCAL:
 0. Start Dev Server (http://localhost:3000):
 npm run dev

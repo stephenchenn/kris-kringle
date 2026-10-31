@@ -2,17 +2,28 @@ const express = require("express");
 const path = require("path");
 const Database = require("better-sqlite3");
 const { randomUUID } = require("crypto");
-const nodemailer = require("nodemailer");
 require("dotenv").config();
+const { transporter, fromEmail } = require('./lib/email');
+const { seedAssignments } = require('./lib/assignments');
+
+if (!process.env.ADMIN_SECRET) {
+  throw new Error('Set ADMIN_SECRET before starting the server');
+}
 
 const app = express();
 app.use(express.json());
+app.use((req, res, next) => {
+  res.set('Referrer-Policy', 'no-referrer');
+  if (req.path.startsWith('/api/')) res.set('Cache-Control', 'no-store');
+  next();
+});
 app.use(express.static(path.join(__dirname, "public")));
 
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, "db.sqlite");
 const db = new Database(DB_PATH);
 // const db = new Database(path.join(__dirname, "db.sqlite"));
 db.pragma("journal_mode = WAL");
+db.pragma("foreign_keys = ON");
 
 // --- DB schema (idempotent) ---
 db.exec(`
@@ -123,17 +134,6 @@ CREATE INDEX IF NOT EXISTS idx_wishlist_items_reserved ON wishlist_items(reserve
   }
 })();
 
-// --- Email transport ---
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: Number(process.env.SMTP_PORT || 587),
-  secure: Number(process.env.SMTP_PORT) === 465, // true for 465, false for 587/2525
-  auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
-  pool: true,
-  maxConnections: 3,
-  maxMessages: 100,
-});
-
 // --- Helpers ---
 function getParticipantByToken(token) {
   const stmt = db.prepare(`
@@ -148,9 +148,9 @@ function getParticipantByToken(token) {
 
 // --- Wishlist helpers ---
 function requireMeByToken(token) {
-  if (!token) return null;
+  if (typeof token !== 'string' || !token) return null;
   return db.prepare(`
-    SELECT p.id AS pid, p.name AS pname, p.email, p.event_id,
+    SELECT p.id AS pid, p.name AS pname, p.email, p.event_id, p.has_drawn,
       e.name AS ename, e.event_date AS edate, e.location AS elocation
     FROM participants p
     JOIN events e ON e.id = p.event_id
@@ -171,32 +171,17 @@ function upsertWishlistForOwner(event_id, owner_id) {
 }
 
 
-function listParticipants(event_id) {
-  return db
-    .prepare(`SELECT id, name, email FROM participants WHERE event_id = ?`)
-    .all(event_id);
-}
-
 function getRecipientsForGiver(event_id, giver_id) {
   return db
     .prepare(
       `
-      SELECT r.id, r.name
+      SELECT DISTINCT r.id, r.name
       FROM assignments a
       JOIN participants r ON r.id = a.recipient_id
       WHERE a.event_id = ? AND a.giver_id = ?
     `
     )
     .all(event_id, giver_id);
-}
-
-function shuffle(arr) {
-  const a = arr.slice();
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
 }
 
 /**
@@ -237,7 +222,7 @@ async function sendAssignmentEmail({ to, participantName, eventName, recipients_
 
   // Compose mail options
   const mailOptions = {
-    from: process.env.FROM_EMAIL,
+    from: fromEmail,
     to,
     subject: `Your Kris Kringle recipients for ${eventName}`,
     html,
@@ -259,11 +244,10 @@ function escapeHtml(s) {
     .replace(/'/g, "&#39;");
 }
 
-function publicBaseUrl(req) {
-  const proto = req.get('x-forwarded-proto');
-  const host = req.get('x-forwarded-host');
-  if (proto && host) return `${proto}://${host}`;
-  return process.env.BASE_URL || "http://localhost:3000";
+function publicBaseUrl() {
+  const url = new URL(process.env.BASE_URL || `http://localhost:${process.env.PORT || 3000}`);
+  if (!['http:', 'https:'].includes(url.protocol)) throw new Error('BASE_URL must use HTTP or HTTPS');
+  return url.origin;
 }
 
 
@@ -325,22 +309,6 @@ app.get("/api/me", (req, res) => {
 });
 
 
-
-// Count how many gifts each recipient already has in this event
-function recipientCounts(event_id) {
-  const rows = db
-    .prepare(
-      `
-    SELECT recipient_id AS id, COUNT(*) AS c
-    FROM assignments
-    WHERE event_id = ?
-    GROUP BY recipient_id
-  `
-    )
-    .all(event_id);
-  const map = new Map(rows.map((r) => [r.id, Number(r.c)]));
-  return map;
-}
 
 // POST /api/draw
 app.post("/api/draw", async (req, res) => {
@@ -410,23 +378,6 @@ app.post("/api/draw", async (req, res) => {
 // server.js (replace your /api/admin/seed endpoint)
 
 
-// Simple derangement: shuffle until no one maps to themselves.
-// For small N (~10) this is fast & fine.
-function derange(ids) {
-  const a = ids.slice();
-  for (let attempts = 0; attempts < 1000; attempts++) {
-    // Fisher-Yates
-    for (let i = a.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [a[i], a[j]] = [a[j], a[i]];
-    }
-    let ok = true;
-    for (let i = 0; i < a.length; i++) if (a[i] === ids[i]) { ok = false; break; }
-    if (ok) return a;
-  }
-  throw new Error("Failed to create derangement");
-}
-
 app.post("/api/admin/seed", (req, res) => {
   const {
     secret,
@@ -442,18 +393,28 @@ app.post("/api/admin/seed", (req, res) => {
   if (secret !== process.env.ADMIN_SECRET) {
     return res.status(403).json({ error: "Forbidden" });
   }
-  if (!eventName) return res.status(400).json({ error: "Missing eventName" });
+  if (typeof eventName !== 'string' || !eventName.trim()) return res.status(400).json({ error: "Missing eventName" });
 
   const people = Array.isArray(participants) ? participants : [];
   if (people.length < 2) return res.status(400).json({ error: "Need at least 2 participants" });
+  if (people.some(p => !p || typeof p.name !== 'string' || !p.name.trim() ||
+    typeof p.email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(p.email.trim()))) {
+    return res.status(400).json({ error: 'Each participant needs a name and valid email' });
+  }
+  if (new Set(people.map(p => p.email.trim().toLowerCase())).size !== people.length) {
+    return res.status(400).json({ error: 'Participant emails must be unique' });
+  }
 
   // Build tiers (same as before)
   let tierDefs = [];
   if (Array.isArray(tiers) && tiers.length > 0) {
+    if (tiers.some(t => !t || !Number.isSafeInteger(t.budgetCents ?? 0) || (t.budgetCents ?? 0) < 0)) {
+      return res.status(400).json({ error: 'Tier budgets must be non-negative integer cents' });
+    }
     tierDefs = tiers.map((t, i) => ({
       id: randomUUID(),
       name: t.name || `Gift ${i + 1}`,
-      budget_cents: Number(t.budgetCents ?? 0) | 0,
+      budget_cents: t.budgetCents ?? 0,
       sort_order: i + 1,
     }));
   } else if (Number.isInteger(giftsPerPerson) && giftsPerPerson > 0) {
@@ -501,8 +462,10 @@ app.post("/api/admin/seed", (req, res) => {
     for (const p of people) {
       const pid = randomUUID();
       const token = randomUUID();
-      insertParticipant.run(pid, eventId, p.name, p.email, token);
-      pRows.push({ id: pid, name: p.name, email: p.email, token });
+      const name = p.name.trim();
+      const email = p.email.trim().toLowerCase();
+      insertParticipant.run(pid, eventId, name, email, token);
+      pRows.push({ id: pid, name, email, token });
     }
 
     // tiers
@@ -510,30 +473,8 @@ app.post("/api/admin/seed", (req, res) => {
       insertTier.run(t.id, eventId, t.name, t.budget_cents, t.sort_order);
     }
 
-    // assignments (unchanged)
-    const giverIds = pRows.map(p => p.id);
-    const alreadyForGiver = new Map(giverIds.map(g => [g, new Set()]));
-    for (const t of tierDefs) {
-      let perm;
-      attempt: for (let tries = 0; tries < 200; tries++) {
-        // derange
-        const a = giverIds.slice();
-        for (let i = a.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
-          [a[i], a[j]] = [a[j], a[i]];
-        }
-        // no self
-        if (a.some((v, i) => v === giverIds[i])) continue attempt;
-        // avoid duplicate recipients across tiers
-        for (let i = 0; i < giverIds.length; i++) {
-          if (alreadyForGiver.get(giverIds[i]).has(a[i])) continue attempt;
-        }
-        perm = a; break;
-      }
-      for (let i = 0; i < giverIds.length; i++) {
-        insertAssignment.run(randomUUID(), eventId, t.id, giverIds[i], perm[i]);
-        alreadyForGiver.get(giverIds[i]).add(perm[i]);
-      }
+    for (const assignment of seedAssignments(pRows, tierDefs)) {
+      insertAssignment.run(randomUUID(), eventId, assignment.tier_id, assignment.giver_id, assignment.recipient_id);
     }
 
     return pRows;
@@ -546,9 +487,7 @@ app.post("/api/admin/seed", (req, res) => {
     return res.status(400).json({ error: e.message });
   }
 
-  const base = (req.get("x-forwarded-proto") && req.get("x-forwarded-host"))
-    ? `${req.get("x-forwarded-proto")}://${req.get("x-forwarded-host")}`
-    : (process.env.BASE_URL || "http://localhost:3000");
+  const base = publicBaseUrl();
 
   res.json({
     event: {
@@ -583,7 +522,8 @@ app.post("/api/admin/send-invites", async (req, res) => {
   const eventRow = db
     .prepare(`SELECT id, name, gifts_per_person FROM events WHERE id = ?`)
     .get(evt);
-  const base = process.env.BASE_URL || "http://localhost:3000";
+  if (!eventRow) return res.status(404).json({ error: 'No event found' });
+  const base = publicBaseUrl();
   const people = db
     .prepare(
       `SELECT name, email, invite_token FROM participants WHERE event_id = ?`
@@ -591,7 +531,7 @@ app.post("/api/admin/send-invites", async (req, res) => {
     .all(evt);
 
   const send = (to, subject, html) =>
-    transporter.sendMail({ from: process.env.FROM_EMAIL, to, subject, html });
+    transporter.sendMail({ from: fromEmail, to, subject, html });
 
   let sent = 0,
     failed = [];
@@ -599,8 +539,8 @@ app.post("/api/admin/send-invites", async (req, res) => {
     const link = `${base}/draw?token=${p.invite_token}`;
     const html = `
       <div style="font-family:Arial,Helvetica,sans-serif;font-size:16px;color:#111111 !important;">
-        <p>Hi ${p.name},</p>
-        <p>You’re invited to join <b>${eventRow.name}</b>!</p>
+        <p>Hi ${escapeHtml(p.name)},</p>
+        <p>You’re invited to join <b>${escapeHtml(eventRow.name)}</b>!</p>
         <p>Click this link to draw your recipients: <a href="${link}">${link}</a></p>
         <p>Each person gives <b>${eventRow.gifts_per_person}</b> gift(s).</p>
         <p>Happy gifting! 🎁</p>
@@ -634,25 +574,13 @@ app.post("/api/admin/send-wishlists", async (req, res) => {
   const eventRow = db
     .prepare(`SELECT id, name FROM events WHERE id = ?`)
     .get(evt);
+  if (!eventRow) return res.status(404).json({ error: 'No event found' });
 
-  const base = publicBaseUrl(req); // or: (process.env.BASE_URL || "http://localhost:3000")
+  const base = publicBaseUrl();
 
   const people = db
     .prepare(`SELECT name, email, invite_token FROM participants WHERE event_id = ?`)
     .all(evt);
-
-  // gently paced transporter helps too
-  const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: Number(process.env.SMTP_PORT || 587),
-    secure: Number(process.env.SMTP_PORT) === 465,
-    auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
-    pool: true,
-    maxConnections: 2,
-    maxMessages: 50,
-    rateLimit: 10,   // <= 10 msgs/sec
-    rateDelta: 1000
-  });
 
   function buildWishlistEmail({ personName, eventName, link }) {
     const subject = `Your wishlist link for ${eventName}`;
@@ -684,7 +612,7 @@ app.post("/api/admin/send-wishlists", async (req, res) => {
 
   async function sendWishlist({ to, subject, text, html }) {
     return transporter.sendMail({
-      from: process.env.FROM_EMAIL,                    // e.g. "Wong's Kris Kringle <noreply@mail.wongskringle.online>"
+      from: fromEmail,
       to,
       subject,
       text,    // 👈 include text
@@ -722,6 +650,9 @@ app.post('/api/admin/event/update', (req, res) => {
   // default to most recent if not provided
   const evt = eventId || db.prepare(`SELECT id FROM events ORDER BY created_at DESC LIMIT 1`).get()?.id;
   if (!evt) return res.status(404).json({ error: 'No event found' });
+  if (!db.prepare('SELECT id FROM events WHERE id = ?').get(evt)) {
+    return res.status(404).json({ error: 'No event found' });
+  }
 
   db.prepare(`
     UPDATE events
@@ -741,6 +672,7 @@ app.post("/api/resend", async (req, res) => {
 
   const me = getParticipantByToken(token);
   if (!me) return res.status(404).json({ error: "Invalid token" });
+  if (!me.has_drawn) return res.status(400).json({ error: "You haven’t drawn yet." });
 
   // fetch tiers
   const tiers = db.prepare(`
@@ -783,6 +715,16 @@ app.post("/api/resend", async (req, res) => {
   }
 });
 
+// All wishlist actions require a completed draw, including direct API access.
+app.use(['/api/wishlist', '/api/wishlists'], (req, res, next) => {
+  const me = requireMeByToken(req.query.token || req.body?.token);
+  if (!me) return res.status(401).json({ error: 'invalid token' });
+  if (!me.has_drawn) return res.status(403).json({ error: 'Draw your recipients before opening wishlists.' });
+  next();
+});
+
+const ownerItemColumns = 'id, wishlist_id, title, url, notes, price_cents, image_url, created_at, updated_at';
+
 // --- Wishlist: me (owner/manage) ---
 app.get('/api/wishlist/me', (req, res) => {
   const me = requireMeByToken(req.query.token);
@@ -791,10 +733,9 @@ app.get('/api/wishlist/me', (req, res) => {
   const wid = upsertWishlistForOwner(me.event_id, me.pid);
   const wl = db.prepare(`SELECT id,event_id,owner_id,created_at,updated_at FROM wishlists WHERE id=?`).get(wid);
 
-  // do not return reserved_by — only a boolean
+  // Owners must never see reservation status or who reserved an item.
   const items = db.prepare(`
     SELECT id, title, url, notes, price_cents, image_url,
-           CASE WHEN reserved_by IS NULL THEN 0 ELSE 1 END AS is_reserved,
            created_at, updated_at
     FROM wishlist_items
     WHERE wishlist_id=?
@@ -826,7 +767,7 @@ app.post('/api/wishlist/item', (req, res) => {
     image_url || null
   );
 
-  const row = db.prepare(`SELECT * FROM wishlist_items WHERE id=?`).get(id);
+  const row = db.prepare(`SELECT ${ownerItemColumns} FROM wishlist_items WHERE id=?`).get(id);
   res.json({ ok: true, item: row });
 });
 
@@ -836,6 +777,8 @@ app.put('/api/wishlist/item/:id', (req, res) => {
   const { token, title, url, notes, price_cents, image_url } = req.body || {};
   const me = requireMeByToken(token);
   if (!me) return res.status(401).json({ error: 'invalid token' });
+
+  if (!title || !String(title).trim()) return res.status(400).json({ error: 'title required' });
 
   const row = db.prepare(`
     SELECT wi.id, wl.owner_id
@@ -856,7 +799,7 @@ app.put('/api/wishlist/item/:id', (req, res) => {
     updated_at  = datetime('now')
   WHERE id = ?
 `).run(
-    title || null,
+    String(title).trim(),
     url || null,
     notes || null,
     Number.isInteger(price_cents) ? price_cents : null,
@@ -865,7 +808,7 @@ app.put('/api/wishlist/item/:id', (req, res) => {
   );
 
 
-  const updated = db.prepare(`SELECT * FROM wishlist_items WHERE id=?`).get(id);
+  const updated = db.prepare(`SELECT ${ownerItemColumns} FROM wishlist_items WHERE id=?`).get(id);
   res.json({ ok: true, item: updated });
 });
 
@@ -918,7 +861,7 @@ app.post('/api/wishlist/item/:id/reserve', (req, res) => {
     return res.status(409).json({ error: 'already reserved' });
   }
 
-  db.prepare(`UPDATE wishlist_items SET reserved_by=?, updated_at=datetime('now') WHERE id=?`)
+  db.prepare(`UPDATE wishlist_items SET reserved_by=? WHERE id=?`)
     .run(me.pid, id);
   res.json({ ok: true });
 });
@@ -931,18 +874,21 @@ app.post('/api/wishlist/item/:id/unreserve', (req, res) => {
   if (!me) return res.status(401).json({ error: 'invalid token' });
 
   const row = db.prepare(`
-    SELECT wi.id, wi.reserved_by, wl.event_id
+    SELECT wi.id, wi.reserved_by, wl.event_id, wl.owner_id
     FROM wishlist_items wi
     JOIN wishlists wl ON wl.id = wi.wishlist_id
     WHERE wi.id = ?
   `).get(id);
   if (!row) return res.status(404).json({ error: 'not found' });
   if (row.event_id !== me.event_id) return res.status(403).json({ error: 'forbidden' });
+  if (!getRecipientsForGiver(me.event_id, me.pid).some(person => person.id === row.owner_id)) {
+    return res.status(403).json({ error: 'not assigned to this participant' });
+  }
   if (row.reserved_by && row.reserved_by !== me.pid) {
     return res.status(403).json({ error: 'not your reservation' });
   }
 
-  db.prepare(`UPDATE wishlist_items SET reserved_by=NULL, updated_at=datetime('now') WHERE id=?`).run(id);
+  db.prepare(`UPDATE wishlist_items SET reserved_by=NULL WHERE id=?`).run(id);
   res.json({ ok: true });
 });
 
@@ -1088,7 +1034,9 @@ app.get("/draw", (req, res) => res.sendFile(indexFile));
 // --- Fallback to SPA (if you later add more pages) ---
 // app.get("*", (req, res) => res.sendFile(path.join(__dirname, "public", "index.html")));
 
-const port = Number(process.env.PORT || 3000);
-app.listen(port, () =>
-  console.log(`KK server running on http://localhost:${port}`)
-);
+if (require.main === module) {
+  const port = Number(process.env.PORT || 3000);
+  app.listen(port, () => console.log(`KK server running on http://localhost:${port}`));
+}
+
+module.exports = { app, db, transporter };

@@ -7,3 +7,6 @@ db.sqlite-shm
 db.sqlite-wal
 res.json
 test.sh
+.local/
+test-results/
+playwright-report/
