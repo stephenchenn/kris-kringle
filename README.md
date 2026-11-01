@@ -4,6 +4,24 @@ Use the free Render hostname: https://kris-kringle.onrender.com.
 See [the 2026 setup guide](documentations/setup-2026.md) for hosting,
 free email setup, backups, and creating this year's event.
 
+Edit your private `.local/event-2026.json`, then create the event and email its
+invitations with one command:
+
+```sh
+npm run event:create
+```
+
+It saves the event ID automatically and reuses an event you already created.
+Running it again keeps the same draws and skips invitations it already sent.
+
+```sh
+npm run event:links      # Show everyone's personal draw and wishlist links
+npm run event:invite     # Send/resend invitations for the saved event
+npm run event:wishlists  # Send wishlist reminder emails
+```
+
+For local development and automated tests:
+
 ```sh
 npm ci
 npm test

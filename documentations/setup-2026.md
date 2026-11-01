@@ -198,34 +198,90 @@ names, emails, tiers, date, and venue. These are examples, not confirmed details
 }
 ```
 
-```sh
-curl --fail-with-body https://kris-kringle.onrender.com/api/admin/seed \
-  -H 'Content-Type: application/json' \
-  --data-binary @.local/event-2026.json -o .local/event-2026-result.json
-```
-
-This returns `event.id` and individual invitation links without sending emails
-or erasing old events. Keep the result private: links grant account access.
-
-Save an ignored `.local/send-2026.json` containing
-`{"secret":"<ADMIN_SECRET>","eventId":"<event.id from the response>"}`.
-When ready to send real invitations:
+From the repository directory, run:
 
 ```sh
-curl --fail-with-body https://kris-kringle.onrender.com/api/admin/send-invites \
-  -H 'Content-Type: application/json' --data-binary @.local/send-2026.json
+npm run event:create
 ```
 
-Check `sent` and `failed`; HTTP 200 can include individual delivery failures.
-People can open wishlists immediately after drawing. To send wishlist reminders,
-use the same JSON with `/api/admin/send-wishlists`. Always specify `eventId`.
-Avoid `/api/admin/reset`: it deletes every event.
+This reads `.local/event-2026.json`, validates the participants and budgets,
+creates the event, and sends its invitation emails. It prints how many emails
+were sent or failed. It uses the live server at
+`https://kris-kringle.onrender.com`; recipients are the addresses in your JSON.
+No pasted JavaScript, curl commands, or manually copied event IDs are needed.
+The helper runs on your computer, so these commands need no Render deployment.
+
+It saves the server response to `.local/event-2026-result.json` and the creation
+and email status to `.local/event-2026-state.json`. It also fills
+`.local/send-2026.json` automatically for compatibility with the old curl commands.
+These files have owner-only permissions and are ignored by Git. Keep them:
+they identify the event and contain personal account links.
+
+If a result from an earlier successful curl command already exists, the helper
+reuses that event. It checks that the saved event matches your configuration and
+still exists on the selected server. If invitations were already sent manually,
+use `npm run event:create -- --no-email` on the first run to adopt it without
+sending them again.
+
+After a successful scripted creation, repeating `npm run event:create` keeps
+the same assignments and skips its previously sent invitations. If a request
+is interrupted or only some invitations succeed, it preserves the event ID and
+reports the problem rather than silently creating another event or sending
+duplicate emails. After fixing email delivery, deliberately resend with:
+
+```sh
+npm run event:invite
+```
+
+This command sends invitations to everyone each time it is run, including people
+who received an earlier invitation. It keeps their existing links and draws.
+
+To view the personal links at any time:
+
+```sh
+npm run event:links
+```
+
+Participants open their invitation, draw, then use the wishlist button. Test
+wishlist add/edit/delete and private reservations using the checklist in the
+local demo section above. To email everyone their wishlist links:
+
+```sh
+npm run event:wishlists
+```
+
+Wishlist reminders are sent each time that command is run. A successful email
+result means the SMTP server accepted the messages; check the inbox to confirm
+delivery.
+
+Optional commands:
+
+```sh
+npm run event:create -- --no-email              # Create/reuse without emailing
+npm run event:create -- --new                   # Create a separate event and email it
+npm run event:create -- --file .local/event-2027.json
+npm run event:create -- --url http://localhost:3000
+npm run event:create -- --help
+```
+
+Use the same `--file` and `--url` options on subsequent invite, links, and
+wishlist commands. A local server needs the admin secret matching that server.
+With `--new`, previous local result, status, and send files are archived under
+`.local/event-2026-history/`. Existing events on the server remain intact.
+Changing participants or budgets after creation requires a new event; the
+helper rejects configuration changes that would otherwise target an older event.
+
+If you explicitly reset the server, all old personal links stop working. Start
+again with `npm run event:create -- --new`. The existing `/api/admin/reset`
+endpoint deletes every event; the event helper does not call it.
 
 ## Test coverage and later work
 
 `npm test` covers allocation rules, invitations, stable draws, resends, wishlist
 CRUD, reservation privacy, ownership, event isolation, and a complete server
-restart. `npm run test:e2e` checks the flow in desktop and mobile Chrome with
+restart. It also runs the event commands against isolated servers, checking saved
+event reuse, manual-curl event adoption, reminders, partial email failures, and
+interrupted requests. `npm run test:e2e` checks the flow in desktop and mobile Chrome with
 separate participant sessions. Both use temporary databases and captured email.
 
 Automatic recommended images from product URLs remain deferred. Manual product
