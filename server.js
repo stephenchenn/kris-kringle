@@ -192,9 +192,10 @@ function getRecipientsForGiver(event_id, giver_id) {
  * @param {string} opts.participantName   - recipient display name
  * @param {string} opts.eventName         - event name
  * @param {Array}  opts.recipients_by_tier - [{ name, budget_cents, recipient }]
+ * @param {string} opts.inviteToken       - this participant's personal invite token
  * @param {string} [opts.replyTo]         - optional reply-to header
  */
-async function sendAssignmentEmail({ to, participantName, eventName, recipients_by_tier, replyTo }) {
+async function sendAssignmentEmail({ to, participantName, eventName, recipients_by_tier, inviteToken, replyTo }) {
   // Small helper to format cents -> "$100"
   const fmt = (cents) => {
     if (typeof cents !== "number") return "";
@@ -211,14 +212,23 @@ async function sendAssignmentEmail({ to, participantName, eventName, recipients_
     })
     .join("");
 
+  const wishlistUrl = `${publicBaseUrl()}/wishlists?token=${encodeURIComponent(inviteToken)}`;
   const html = `
     <div style="font-family:Arial,Helvetica,sans-serif;font-size:16px;color:#111111;">
       <p>Hi ${escapeHtml(participantName)},</p>
       <p>Your Kris Kringle recipients for <b>${escapeHtml(eventName)}</b> are:</p>
       <ul style="margin:0 0 16px 20px;padding:0;">${items}</ul>
+      <p>Add your gift ideas and view your recipients' wishlists: <a href="${escapeHtml(wishlistUrl)}">Open wishlists</a></p>
       <p>Happy gifting! 🎁</p>
     </div>
   `;
+  const text = [
+    `Hi ${participantName},`, '',
+    `Your Kris Kringle recipients for ${eventName} are:`,
+    ...recipients_by_tier.map(t => `${t.name}${typeof t.budget_cents === 'number' && t.budget_cents > 0 ? ` (${fmt(t.budget_cents)})` : ''}: ${t.recipient || '—'}`),
+    '', `Add your gift ideas and view your recipients' wishlists: ${wishlistUrl}`,
+    '', 'Happy gifting! 🎁',
+  ].join('\n');
 
   // Compose mail options
   const mailOptions = {
@@ -226,6 +236,7 @@ async function sendAssignmentEmail({ to, participantName, eventName, recipients_
     to,
     subject: `Your Kris Kringle recipients for ${eventName}`,
     html,
+    text,
   };
   if (replyTo) mailOptions.replyTo = replyTo;
 
@@ -362,6 +373,7 @@ app.post("/api/draw", async (req, res) => {
       participantName: meRow.name,
       eventName: meRow.event_name,
       recipients_by_tier,
+      inviteToken: token,
       // replyTo: "Your Name <you@yourdomain.com>", // optional
     })
       .catch((e) => console.error("Email error:", e && e.message ? e.message : e));
@@ -707,6 +719,7 @@ app.post("/api/resend", async (req, res) => {
       participantName: me.name,
       eventName: me.event_name,
       recipients_by_tier,
+      inviteToken: token,
     });
     res.json({ ok: true });
   } catch (e) {

@@ -36,7 +36,12 @@ test('email invitation → draw → wishlist → private reservations → edit a
     await expect(owner.page.locator('#recipients')).toHaveText(originalRecipients);
     await owner.page.locator('#resendBtn').click();
     await expect(owner.page.locator('#note')).toHaveText('Email re-sent. Check your inbox.');
-    await owner.page.locator('#wishlistBtn').click();
+    const confirmation = server.emails().filter(mail =>
+      mail.to[0].address === owner.email && mail.subject === `Your Kris Kringle recipients for ${seeded.event.name}`
+    ).at(-1);
+    const wishlistLink = confirmation.html.match(/href="([^"]+\/wishlists\?token=[^"]+)"/)[1];
+    expect(wishlistLink).toBe(`${server.baseUrl}/wishlists?token=${owner.token}`);
+    await owner.page.goto(wishlistLink);
     await expect(owner.page.locator('#greeting')).toContainText(owner.name);
     await owner.page.locator('#btn_toggle_add').click();
     await owner.page.locator('#f_title').fill('Coffee grinder');

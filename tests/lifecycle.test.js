@@ -59,7 +59,9 @@ test('event lifecycle, email links, wishlist privacy, reservations and persisten
 
   await t.test('every participant gives and receives each budget with no self or duplicate recipients', async () => {
     for (const person of people) {
-      const result = await server.request('POST', '/api/draw', { token: person.token });
+      const result = await server.request('POST', '/api/draw', { token: person.token }, {
+        'X-Forwarded-Host': 'untrusted.example', 'X-Forwarded-Proto': 'https',
+      });
       assert.equal(result.status, 200);
       person.recipients = result.data.recipients_by_tier;
       assert.deepEqual(person.recipients.map(tier => tier.budget_cents), [10000, 5000]);
@@ -78,6 +80,24 @@ test('event lifecycle, email links, wishlist privacy, reservations and persisten
     assert.equal(server.emails().length, 10);
     assert.equal((await server.request('POST', '/api/resend', { token: people[0].token })).status, 200);
     assert.equal(server.emails().length, 11);
+  });
+
+  await t.test('draw confirmations and resends link to the correct participant’s wishlist', async () => {
+    const confirmations = server.emails().filter(mail => mail.subject === `Your Kris Kringle recipients for ${seeded.event.name}`);
+    for (const person of people) {
+      const emails = confirmations.filter(mail => mail.to[0].address === person.email);
+      assert.equal(emails.length, person === people[0] ? 2 : 1);
+      const link = `${server.baseUrl}/wishlists?token=${encodeURIComponent(person.token)}`;
+      for (const mail of emails) {
+        assert(mail.html.includes(`href="${link}"`));
+        assert(mail.text.includes(link));
+        assert(!mail.html.includes('untrusted.example'));
+        for (const other of people.filter(other => other !== person)) {
+          assert(!mail.html.includes(other.token));
+          assert(!mail.text.includes(other.token));
+        }
+      }
+    }
   });
 
   const owner = people[0];
