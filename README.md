@@ -131,6 +131,9 @@ To Do:
 5. Test ✅
 6. Add budget to gifts and ensure each person gives and receives a gift of each budget (e.g. 2 gifts, one budget $50 and one budget $100) ✅
 7. Wishlist ✅
+8. Notification system - Notify participant when their recipient add a new wishlist item
+9. Add panel for gifts they've reserved
+10. Frontend: Back to top and Collapse All
 
 Future Actions
 - Godaddy domain wongskringle.online expires on 15 Oct, 2026 (Auto-renew turned off)
