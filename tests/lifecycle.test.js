@@ -38,7 +38,15 @@ test('event lifecycle, email links, wishlist privacy, reservations and persisten
     for (const person of people) {
       const email = server.emails().find(mail => mail.to[0].address === person.email);
       assert(email.html.includes(person.link));
+      assert(email.text.includes(person.link));
+      assert(email.text.includes(person.name));
+      assert(email.text.includes(seeded.event.name));
+      assert(email.text.includes('Keep this link private'));
       assert(!email.html.includes('untrusted.example'));
+      assert(!email.text.includes('untrusted.example'));
+      for (const other of people.filter(other => other !== person)) {
+        assert(!email.text.includes(other.token));
+      }
     }
   });
 

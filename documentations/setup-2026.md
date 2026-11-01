@@ -38,7 +38,7 @@ the fixes. If a future resume leaves it suspended, check workspace Billing.
 ## Free email without SendGrid or a paid domain
 
 Use a personal Gmail account directly over SMTP. The existing application
-already supports it, so no application code change is needed. Google sends
+already supports it. Google sends
 from the Gmail address itself; you do not need to buy a sender domain or
 authenticate the expired domain with another email provider.
 
@@ -59,7 +59,7 @@ SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
 SMTP_USER=your-account@gmail.com
 SMTP_PASS=<Google app password>
-FROM_EMAIL="Family Kris Kringle <your-account@gmail.com>"
+FROM_EMAIL="Your name - Family Kris Kringle <your-account@gmail.com>"
 ```
 
 Use exactly the same Gmail address in `SMTP_USER` and `FROM_EMAIL`. Keep the
@@ -70,7 +70,7 @@ any messages. A separate test invitation is still needed to check inbox delivery
 
 Replace `your-account@gmail.com` with your actual Gmail address in both fields.
 In Render's individual value boxes, enter `FROM_EMAIL` without the outer double
-quotes shown in dotenv syntax, for example `Family Kris Kringle <your Gmail address>`.
+quotes shown in dotenv syntax, for example `Stephen - Family Kris Kringle <your Gmail address>`.
 Paste the 16-character Google app password without its grouping spaces. Edited
 values do not take effect until you save the environment changes and deploy.
 
@@ -80,6 +80,39 @@ and occasional reminders are well below that limit for this family event.
 Google documents [SMTP settings](https://support.google.com/mail/answer/7104828),
 [app passwords](https://support.google.com/accounts/answer/185833), and
 [sending limits](https://support.google.com/mail/answer/22839).
+
+### If invitations go to Spam
+
+All three email types include plain-text and HTML versions. SMTP requires TLS,
+and the From display name should identify the organiser so family members
+recognise the sender. These improve message quality; they do not guarantee
+inbox placement.
+
+For Gmail and Google Workspace recipients:
+
+1. In the recipient's Spam folder, select the invitation and choose **Not spam**.
+2. Add the exact Gmail sender address (the address in `SMTP_USER`) to Contacts.
+3. If needed, create a filter in that inbox: **Show search options → From**,
+   enter the exact sender address, then **Create filter → Never send it to Spam
+   → Create filter**. Apply it to existing matching conversations if offered.
+   A Workspace administrator's policy can still take precedence.
+
+Google documents [marking legitimate mail as not spam and adding contacts](https://support.google.com/mail/answer/1366858)
+and [creating filters](https://support.google.com/mail/answer/6579).
+
+To diagnose an affected message, open **More (⋮) → Show original** in the
+recipient's inbox and check **SPF**, **DKIM** and **DMARC**, plus the spam warning
+shown above the message. When all three pass, authentication is working; the
+headers alone do not explain the spam classification. Do not change the
+recipient domain's DNS to authenticate mail sent from Gmail. Google manages
+authentication for the Gmail sender domain.
+
+On 2 November 2026, a supplied invitation header from the affected Gmail inbox
+showed SPF, DKIM and DMARC passing, with TLS 1.3. This confirms the existing Gmail
+SMTP setup authenticates correctly for that message, but does not prove inbox
+placement for future messages or other recipients. Follow Google's
+[sender guidelines](https://support.google.com/mail/answer/81126) and avoid
+repeated mass resends while testing.
 
 ### Other free options
 

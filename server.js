@@ -544,25 +544,36 @@ app.post("/api/admin/send-invites", async (req, res) => {
     )
     .all(evt);
 
-  const send = (to, subject, html) =>
-    transporter.sendMail({ from: fromEmail, to, subject, html });
+  const send = (to, subject, html, text) =>
+    transporter.sendMail({ from: fromEmail, to, subject, html, text });
 
   let sent = 0,
     failed = [];
   for (const p of people) {
-    const link = `${base}/draw?token=${p.invite_token}`;
+    const link = `${base}/draw?token=${encodeURIComponent(p.invite_token)}`;
     const html = `
-      <div style="font-family:Arial,Helvetica,sans-serif;font-size:16px;color:#111111 !important;">
+      <div style="font-family:Arial,Helvetica,sans-serif;font-size:16px;color:#111111;">
         <p>Hi ${escapeHtml(p.name)},</p>
         <p>You’re invited to join <b>${escapeHtml(eventRow.name)}</b>!</p>
-        <p>Click this link to draw your recipients: <a href="${link}">${link}</a></p>
+        <p>Use your personal link to draw your gift recipients. After drawing, you can add your gift ideas and view the family’s wishlists.</p>
+        <p><a href="${escapeHtml(link)}">${escapeHtml(link)}</a></p>
         <p>Each person gives <b>${eventRow.gifts_per_person}</b> gift(s).</p>
+        <p>Keep this link private: it gives access to your draw and wishlist.</p>
         <p>Happy gifting! 🎁</p>
       </div>
     `;
+    const text = [
+      `Hi ${p.name},`, '',
+      `You’re invited to join ${eventRow.name}!`, '',
+      'Use your personal link to draw your gift recipients. After drawing, you can add your gift ideas and view the family’s wishlists.',
+      link, '',
+      `Each person gives ${eventRow.gifts_per_person} gift(s).`, '',
+      'Keep this link private: it gives access to your draw and wishlist.', '',
+      'Happy gifting! 🎁',
+    ].join('\n');
     try {
       // eslint-disable-next-line no-await-in-loop
-      await send(p.email, `You're invited: ${eventRow.name}`, html);
+      await send(p.email, `You're invited: ${eventRow.name}`, html, text);
       sent++;
     } catch (e) {
       failed.push({ email: p.email, error: e.message });
