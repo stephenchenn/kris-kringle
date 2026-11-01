@@ -88,6 +88,9 @@
       status.textContent = foreignPrice
         ? `Item found. The shop’s price is ${product.currency} ${(product.price_cents / 100).toFixed(2)}; enter an AUD price below.`
         : filled ? 'Details filled. You can edit them before adding the item.' : 'Item found. Your edits have been kept.';
+      if (product.price_cents === null && !fields.price_cents.value.trim()) {
+        status.textContent += ' A clear price wasn’t available; you can add it below.';
+      }
     } catch (error) {
       if (requestId === sequence && error.name !== 'AbortError') status.textContent = error.message || 'Could not read this page. You can enter the details below.';
     } finally {

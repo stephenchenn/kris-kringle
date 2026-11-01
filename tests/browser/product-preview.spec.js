@@ -111,6 +111,7 @@ test('blocked shops leave manual entry available and foreign prices are clearly 
       const url = route.request().postDataJSON().url;
       if (url.endsWith('/blocked')) return route.fulfill({ status: 422, json: { error: 'This shop blocks automatic lookups. You can enter the item details below.' } });
       if (url.endsWith('/broken')) return route.fulfill({ status: 502, contentType: 'text/html', body: '<html>Bad gateway</html>' });
+      if (url.endsWith('/no-price')) return route.fulfill({ json: { product: { ...product, price_cents: null } } });
       return route.fulfill({ json: { product: { ...product, currency: 'USD' } } });
     });
     await page.locator('#f_url').fill('https://shop.example.test/blocked');
@@ -131,5 +132,9 @@ test('blocked shops leave manual entry available and foreign prices are clearly 
     await page.locator('#f_url').fill('https://shop.example.test/broken');
     await expect(page.locator('#product_lookup_status')).toContainText('Could not read this product page');
     await expect(page.locator('#btn_product_lookup')).toBeEnabled();
+    await page.locator('#f_url').fill('https://shop.example.test/no-price');
+    await expect(page.locator('#f_title')).toHaveValue(product.title);
+    await expect(page.locator('#product_lookup_status')).toContainText('A clear price wasn’t available');
+    await expect(page.locator('#f_price')).toHaveValue('');
   } finally { await server.stop(); server.remove(); }
 });

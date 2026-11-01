@@ -36,6 +36,41 @@ test('Open Graph and microdata fill missing details without guessing a price', (
   for (const invalid of ['Was $100 now $50', 'free shipping', '', '-12', NaN, Infinity]) assert.equal(priceInCents(invalid), null);
 });
 
+test('ProductGroup prices come from the linked SKU, not another colour or the unpriced parent', () => {
+  const url = 'https://www.footlocker.com.au/en/product/~/244106507304.html';
+  const group = { '@type': 'ProductGroup', name: 'Jordan 12 Retro', url,
+    sku: '244106507304', image: '/selected.jpg', hasVariant: [
+      { '@type': 'Product', name: 'Jordan 12 Retro — white', sku: '244106213804', image: '/white.jpg',
+        offers: { price: 199, priceCurrency: 'AUD', url: 'https://www.footlocker.com.au/product/shoes/244106213804.html' } },
+      { '@type': 'Product', name: 'Jordan 12 Retro — brown', sku: '244106507304', image: '/brown.jpg',
+        offers: { price: 290, priceCurrency: 'AUD', url: 'https://www.footlocker.com.au/product/shoes/244106507304.html' } },
+    ] };
+  const result = extractProduct(page(group), url);
+  assert.equal(result.price_cents, 29000);
+  assert.equal(result.currency, 'AUD');
+  assert.equal(result.image_url, 'https://www.footlocker.com.au/brown.jpg');
+  // Never substitute a cheaper different colour if the selected variant is missing.
+  group.hasVariant.pop();
+  assert.equal(extractProduct(page(group), url).price_cents, null);
+});
+
+test('explicit displayed product prices support regional currencies and ignore crossed-out prices', () => {
+  const html = '<title>Shoes</title><aside class="recommendations"><div class="product-price">A$99</div></aside><div data-testid="ProductPrice"><del>A$350.00</del><span class="sr-only">Sale price</span><span>A$&nbsp;290.00</span></div><p>Pay in four instalments of $72.50</p>';
+  assert.deepEqual(extractProduct(html, 'https://shop.example.test/shoes'), {
+    title: 'Shoes', image_url: null, price_cents: 29000, currency: 'AUD',
+  });
+  const extract = markup => extractProduct(`<title>Gift</title>${markup}`, 'https://shop.example.test/item');
+  assert.equal(extract('<div class="product-price">US$24.95</div>').currency, 'USD');
+  assert.equal(extract('<div class="product-price">€19,95</div>').price_cents, 1995);
+  assert.equal(extract('<div class="product-price" hidden>A$5</div><p>Shipping $10</p>').price_cents, null);
+  assert.equal(extract('<div class="product-price">A$290.00</div><div class="current-price">A$199.00</div>').price_cents, null);
+  assert.equal(extract('<div class="product-price">A$25–A$50</div>').price_cents, null);
+  assert.equal(extract('<div class="product-price">Was $99, now $49</div>').price_cents, null);
+  assert.equal(priceInCents('A$ 290.00'), 29000);
+  // Standard structured metadata remains preferred over display fallbacks.
+  assert.equal(extractProduct(page(product) + '<div class="product-price">A$1</div>', 'https://shop.example.test/item').price_cents, 9950);
+});
+
 test('price specifications, encoding, image safety and bot challenges are handled', () => {
   const specification = page({ ...product, image: 'javascript:alert(1)', offers: { priceSpecification: { price: 24.9, priceCurrency: 'AUD' } } });
   const details = extractProduct(specification, 'https://shop.example.test/item');
