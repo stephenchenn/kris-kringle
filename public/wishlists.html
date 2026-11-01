@@ -1,697 +1,80 @@
 <!doctype html>
-<html>
+<html lang="en-AU">
 
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Kris Kringle Wishlists</title>
     <link rel="icon" href="/favicon.ico?v=3" sizes="any">
-    <style>
-        /* ===== Pastel background (choose one) ===== */
-        :root {
-            /* Soft lavender */
-            --page-bg: #f6f3ff;
-            /* Alt ideas:
-                --page-bg: #fef7fb;   // blush pink
-                --page-bg: #f3fbff;   // powder blue
-                --page-bg: #f5fff7;   // mint
-            */
-            --card-bg: #ffffff;
-            --card-border: #e5e7eb;
-            --shadow: 0 1px 2px rgba(16, 24, 40, .06), 0 1px 1px rgba(16, 24, 40, .04);
-        }
-
-        html,
-        body {
-            background: var(--page-bg);
-        }
-
-        /* Keep content readable on the pastel */
-        body {
-            backdrop-filter: saturate(1.05);
-        }
-
-        /* Make cards pop a bit against the pastel */
-        .card {
-            background: var(--card-bg);
-            border: 1px solid var(--card-border);
-            box-shadow: var(--shadow);
-        }
-
-        /* Optional: soften the add form box too */
-        .add-wrap,
-        .greeting {
-            background: #fff;
-            box-shadow: var(--shadow);
-        }
-
-
-        body {
-            font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-            margin: 24px;
-        }
-
-        h1 {
-            margin-bottom: 8px;
-        }
-
-        .muted {
-            color: #6b7280;
-            font-size: 14px;
-        }
-
-        .grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-            gap: 16px;
-            align-items: start;
-            /* ← prevent row mates from stretching */
-            align-content: start;
-            /* extra safety for some browsers */
-            padding-bottom: 16px;
-        }
-
-        .card {
-            border: 1px solid #e5e7eb;
-            border-radius: 12px;
-            padding: 12px;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-
-        /* Header alignment fix */
-        .card-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 12px;
-        }
-
-        .card-header .left {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            min-width: 0;
-        }
-
-        .card-header .right {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-
-        .owner {
-            font-weight: 600;
-            margin: 0;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-
-        .item {
-            border: 1px solid #e5e7eb;
-            border-radius: 10px;
-            padding: 10px;
-            margin: 8px 0;
-        }
-
-        .row {
-            display: flex;
-            gap: 8px;
-            flex-wrap: wrap;
-            align-items: center;
-        }
-
-        button {
-            padding: 6px 10px;
-            border-radius: 8px;
-            border: 1px solid #d1d5db;
-            background: #111;
-            color: #fff;
-            cursor: pointer;
-        }
-
-        button[disabled] {
-            opacity: .5;
-            cursor: not-allowed;
-        }
-
-        img {
-            max-width: 100%;
-            border-radius: 8px;
-            display: block;
-            margin: 6px 0;
-        }
-
-        a {
-            color: #2563eb;
-            text-decoration: none;
-        }
-
-        a:hover {
-            text-decoration: underline;
-        }
-
-        .pill {
-            display: inline-block;
-            padding: 2px 8px;
-            border-radius: 9999px;
-            font-size: 12px;
-        }
-
-        .pill.green {
-            background: #ecfdf5;
-            color: #065f46;
-            border: 1px solid #a7f3d0;
-        }
-
-        .pill.gray {
-            background: #f3f4f6;
-            color: #374151;
-            border: 1px solid #e5e7eb;
-        }
-
-        /* collapse */
-        .collapse {
-            overflow: hidden;
-            transition: max-height .25s ease;
-        }
-
-        .collapse.collapsed {
-            max-height: 0;
-        }
-
-        /* final state has no cap so long lists never clip */
-        .collapse.expanded {
-            max-height: none;
-        }
-
-        /* smoother animation on some browsers */
-        .collapse.expanding,
-        .collapse.collapsing {
-            will-change: max-height;
-        }
-
-
-
-        .btn-link {
-            background: transparent;
-            color: #2563eb;
-            border: none;
-            padding: 0;
-            cursor: pointer;
-        }
-
-        /* Top form */
-        .add-wrap {
-            border: 1px solid #e5e7eb;
-            border-radius: 12px;
-            padding: 12px;
-            margin: 16px 0;
-        }
-
-        .greeting {
-            font-size: 16px;
-            margin: 6px 0 12px;
-        }
-
-        .input,
-        textarea.input {
-            width: 100%;
-            padding: 8px;
-            border: 1px solid #d1d5db;
-            border-radius: 8px;
-            max-width: 100%;
-            box-sizing: border-box;
-
-        }
-
-        .input-row {
-            display: flex;
-            gap: 8px;
-            flex-wrap: wrap;
-            margin: 8px 0;
-        }
-
-        .input-row .half {
-            flex: 1 1 220px;
-        }
-
-        .input-row .full {
-            flex: 1 1 100%;
-        }
-
-        .product-link-row .input { flex: 1 1 220px; }
-        .product-link-row button { flex: 0 0 auto; }
-        #product_lookup_status { margin: 6px 0 10px; font-size: 14px; }
-        #product_image_preview {
-            max-width: 180px;
-            max-height: 180px;
-            object-fit: contain;
-            border-radius: 8px;
-            margin: 4px 0 8px;
-        }
-
-        .greeting {
-            font-size: 18px;
-            /* larger */
-            line-height: 1.5;
-            font-weight: 600;
-            /* semi-bold */
-            margin: 20px 0 16px;
-            /* more space above/below */
-            padding: 12px 14px;
-            /* comfy padding */
-            border: 1px solid #e5e7eb;
-            border-radius: 12px;
-            background: #fafaf9;
-            /* subtle warm tint */
-            white-space: pre-line;
-        }
-
-        @media (min-width: 768px) {
-            .greeting {
-                font-size: 20px;
-                margin: 24px 0 18px;
-                padding: 14px 16px;
-            }
-        }
-
-        .form-title {
-            font-weight: 600;
-            margin: 4px 0 10px;
-        }
-
-        /* Toggle button */
-        /* Compact toggle pill */
-        .btn-toggle {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            border: 1px solid #e5e7eb;
-            background: #fff;
-            padding: 4px 8px;
-            border-radius: 9999px;
-            cursor: pointer;
-            font-weight: 500;
-            font-size: 13px;
-            line-height: 1;
-            /* tighter line height */
-            color: #374151;
-            transition: background .15s ease, border-color .15s ease, box-shadow .15s ease;
-        }
-
-        .btn-toggle:hover {
-            background: #f9fafb;
-            border-color: #d1d5db;
-        }
-
-        .btn-toggle:focus-visible {
-            outline: none;
-            box-shadow: 0 0 0 3px rgba(37, 99, 235, .35);
-        }
-
-        /* Smaller, better-aligned chevron */
-        .chev {
-            display: inline-block;
-            width: 10px;
-            height: 10px;
-            /* smaller */
-            border-right: 1.75px solid currentColor;
-            border-bottom: 1.75px solid currentColor;
-            transform: rotate(-45deg);
-            /* ▶ collapsed */
-            transform-origin: 50% 50%;
-            margin-right: 0;
-            /* no extra gap */
-            position: relative;
-            top: 0.5px;
-            /* nudges baseline alignment */
-        }
-
-        .chev.expanded {
-            transform: rotate(45deg);
-        }
-
-        /* ▼ expanded */
-
-        /* Smaller badge so the pill feels balanced */
-        .badge {
-            display: inline-block;
-            min-width: 18px;
-            padding: 2px 6px;
-            font-size: 11px;
-            line-height: 1;
-            text-align: center;
-            border-radius: 9999px;
-            background: #f3f4f6;
-            color: #374151;
-            border: 1px solid #e5e7eb;
-        }
-
-        /* Respect prefers-reduced-motion */
-        @media (prefers-reduced-motion: reduce) {
-            .chev {
-                transition: none;
-            }
-
-            .btn-toggle {
-                transition: none;
-            }
-        }
-
-        /* Constrain layout on desktop and center it */
-        @media (min-width: 1024px) {
-            body {
-                max-width: 1100px;
-                /* tweak to taste: 960–1200px works well */
-                margin: 24px auto;
-                /* centers the page */
-                padding: 0 12px;
-                /* a little side breathing room */
-            }
-        }
-
-        /* Put delete button in the item’s top-right */
-        /* Item container */
-        .item {
-            position: relative;
-        }
-
-        /* Floating toolbar that holds Edit + Delete */
-        .item-toolbar {
-            position: absolute;
-            top: 8px;
-            right: 8px;
-            display: flex;
-            gap: 6px;
-            background: #fff;
-            border: 1px solid #e5e7eb;
-            border-radius: 8px;
-            padding: 4px 6px;
-            box-shadow: var(--shadow);
-            z-index: 2;
-        }
-
-        /* Give room so title/image don’t sit under the toolbar */
-        .item.has-toolbar {
-            padding-top: 56px;
-        }
-
-        @media (min-width: 640px) {
-            .item.has-toolbar {
-                padding-top: 48px;
-            }
-
-            /* a bit tighter on wider screens */
-        }
-
-        /* Buttons inside the toolbar */
-        .edit-btn,
-        .delete-btn {
-            padding: 3px 6px;
-            font-size: 12px;
-            line-height: 1;
-            background: #fff;
-            border: 1px solid #d1d5db;
-            border-radius: 6px;
-            cursor: pointer;
-        }
-
-        .edit-btn {
-            color: #1f2937;
-        }
-
-        .edit-btn:hover {
-            background: #f3f4f6;
-        }
-
-        .delete-btn {
-            color: #b91c1c;
-            border-color: #fca5a5;
-        }
-
-        .delete-btn:hover {
-            background: #fee2e2;
-        }
-
-        .delete-btn:focus-visible {
-            outline: none;
-            box-shadow: 0 0 0 3px rgba(239, 68, 68, .25);
-        }
-
-        /* Inline edit form (keep your existing styling) */
-        .edit-row {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            margin-top: 8px;
-            margin-bottom: 14px;
-        }
-
-        .edit-row .field {
-            margin-bottom: 10px;
-        }
-
-        .edit-row .field:last-of-type {
-            margin-bottom: 0;
-        }
-
-        .edit-actions {
-            display: flex;
-            gap: 8px;
-            align-items: center;
-            margin-top: 10px;
-        }
-
-        .btn-lite {
-            padding: 6px 10px;
-            border-radius: 8px;
-            border: 1px solid #d1d5db;
-            background: #fff;
-            color: #111;
-            cursor: pointer;
-        }
-
-        .btn-lite:hover {
-            background: #f9fafb;
-        }
-
-        /* Labeled fields in the inline editor */
-        .field {
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-        }
-
-        .field-label {
-            font-size: 12px;
-            line-height: 1.2;
-            color: #4b5563;
-            /* gray-600 */
-            font-weight: 600;
-        }
-
-        /* Pretty "View link" button */
-        .btn-view {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            padding: 8px 12px;
-            /* ↑ more internal padding */
-            margin: 10px 0 6px;
-            /* ↑ space around the button */
-            border: 1px solid #d1d5db;
-            border-radius: 8px;
-            background: #fff;
-            color: #2563eb;
-            font-weight: 600;
-            text-decoration: none;
-            box-shadow: var(--shadow);
-            transition: background .15s ease, border-color .15s ease, box-shadow .15s ease, transform .05s ease;
-        }
-
-
-        .btn-view:hover {
-            background: #eff6ff;
-            border-color: #93c5fd;
-        }
-
-        .btn-view:active {
-            transform: translateY(1px);
-        }
-
-        .btn-view:focus-visible {
-            outline: none;
-            box-shadow: 0 0 0 3px rgba(37, 99, 235, .3);
-        }
-
-        /* tiny external-arrow */
-        .btn-view::after {
-            content: "↗";
-            font-size: 12px;
-            line-height: 1;
-        }
-
-        /* Respect iOS/Android bottom bars so last panel isn't obscured */
-        :root {
-            --safe-bottom: env(safe-area-inset-bottom, 0px);
-        }
-
-        body {
-            padding-bottom: calc(var(--safe-bottom) + 32px);
-            /* extra room at the bottom */
-        }
-
-        #event-info .form-title {
-            margin-bottom: 6px;
-        }
-
-        #event-info strong {
-            font-weight: 600;
-        }
-
-        /* CSS */
-        #btn_toggle_add {
-            appearance: none;
-            backface-visibility: hidden;
-            background-color: #27ae60;
-            border-radius: 8px;
-            border-style: none;
-            box-shadow: rgba(39, 174, 96, .15) 0 4px 9px;
-            box-sizing: border-box;
-            color: #fff;
-            cursor: pointer;
-            display: inline-block;
-            font-family: Inter, -apple-system, system-ui, "Segoe UI", Helvetica, Arial, sans-serif;
-            font-size: 13px;
-            font-weight: 600;
-            letter-spacing: normal;
-            line-height: 1.5;
-            outline: none;
-            overflow: hidden;
-            padding: 10px 12px;
-            position: relative;
-            text-align: center;
-            text-decoration: none;
-            transform: translate3d(0, 0, 0);
-            transition: all .3s;
-            user-select: none;
-            -webkit-user-select: none;
-            touch-action: manipulation;
-            vertical-align: top;
-            white-space: nowrap;
-        }
-
-        #btn_toggle_add:hover {
-            background-color: #1e8449;
-            opacity: 1;
-            transform: translateY(0);
-            transition-duration: .35s;
-        }
-
-        #btn_toggle_add:active {
-            transform: translateY(2px);
-            transition-duration: .35s;
-        }
-
-        #btn_toggle_add:hover {
-            box-shadow: rgba(39, 174, 96, .2) 0 6px 12px;
-        }
-
-        #event-info .details {
-            margin-left: 6px;
-            /* shift the block a bit */
-            padding-left: 12px;
-            /* space before the text */
-            border-left: 3px solid #e5e7eb;
-            /* subtle guideline */
-        }
-
-        #addToggleRow {
-            justify-content: flex-end;
-        }
-
-        /* thin divider used inside info card */
-        .divider {
-            height: 1px;
-            background: #e5e7eb;
-            margin: 12px 0;
-            border-radius: 9999px;
-        }
-
-        .rules {
-            margin-left: 1.5em;
-            /* Indent the whole block */
-        }
-
-        .rules p {
-            margin: 0.5em 0;
-            text-indent: -1em;
-            /* Keeps numbers aligned nicely */
-            padding-left: 1em;
-        }
-    </style>
+    <link rel="stylesheet" href="/wishlists.css" />
 </head>
 
 <body>
-    <h1>Wong's Kris Kringle Wishlists</h1>
-    <div class="muted">
-        Authenticated by your invite token.
-        <br><br>
-        RULES:
-        <br>
-        <div class="rules">
-            <p>1. <span style="color: #b91c1c;">DO NOT share this link with others!</span></p>
-            <p>2. Reserve items anonymously so no one buys duplicates, only reserve items you intend to purchase.</p>
-            <p>3. Only people who share common recipients can see the reserved status of a gift.</p>
-        </div>
-        <br>
-        Note: You're not restricted to adding items up to this year's budget(s)/gift number. Add more gifts at different price points to give your gift buyer some freedom of choice - it makes it fun and surprising!
+    <div class="page-shell">
+        <header class="site-header">
+            <a class="brand" href="#top" aria-label="Kris Kringle wishlists">
+                <svg class="brand-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true"><rect x="5" y="13" width="22" height="15" rx="2"/><path d="M3 9h26v5H3zM16 9v19M16 9C7 10 6 2 11 3c3 0 5 6 5 6Zm0 0c9 1 10-7 5-6-3 0-5 6-5 6Z"/></svg>
+                <span>kris kringle<span class="brand-caption">A little thought goes a long way.</span></span>
+            </a>
+            <span class="private-note"><span aria-hidden="true">✧</span> Just between us</span>
+        </header>
+
+        <main id="top">
+            <section class="welcome" aria-labelledby="page-title">
+                <div>
+                    <p id="event-name" class="eyebrow">THE FAMILY GIFT EXCHANGE</p>
+                    <h1 id="page-title">A little wishful thinking.</h1>
+                    <p class="welcome-copy">Good gifts start with a few good hints. Share what you love, find something they’ll love, and keep the surprise.</p>
+                </div>
+                <div class="welcome-art" aria-hidden="true"><span>with a little</span><strong>thought<br>&amp; joy.</strong><span>✧ &nbsp; ✧ &nbsp; ✧</span></div>
+            </section>
+
+            <p id="greeting" class="greeting" hidden></p>
+            <div id="event-info"></div>
+
+            <details class="wishlist-guide">
+                <summary>A few things to keep the magic alive <span aria-hidden="true">+</span></summary>
+                <div class="guide-content">
+                    <p><strong>Keep your invite link to yourself.</strong> It gives access to your wishlist and recipients.</p>
+                    <p><strong>Reserve thoughtfully.</strong> Only reserve gifts you intend to buy. The recipient can’t see reservations; their gift givers can, so there are no accidental doubles.</p>
+                    <p><strong>Give them options.</strong> Add a few ideas at different prices. You can add more items than the number of gifts you’re receiving.</p>
+                </div>
+            </details>
+
+            <div class="section-heading">
+                <div><p class="eyebrow">GOOD THINGS, ALL IN ONE PLACE</p><h2>Everyone’s wishlists</h2></div>
+                <div id="addToggleRow" class="row" hidden>
+                    <button id="btn_toggle_add" type="button" aria-controls="addForm" aria-expanded="false">Add an item</button>
+                </div>
+            </div>
+
+            <section id="addForm" class="add-wrap" aria-labelledby="add-title" hidden>
+                <div class="form-heading"><div><p class="eyebrow">DROP A HINT</p><h3 id="add-title">Something you’d love.</h3></div><span class="form-aside">A link is a lovely place to start.</span></div>
+                <label class="field-label" for="f_url">Product link <span class="optional">optional</span></label>
+                <div class="input-row product-link-row">
+                    <input id="f_url" class="input" type="url" aria-label="Product link" placeholder="https://your-favourite-shop.com/something-lovely" />
+                    <button id="btn_product_lookup" class="btn-lite" type="button" disabled>Get details</button>
+                </div>
+                <p id="product_lookup_status" class="muted" role="status" aria-live="polite">Paste a product link to fill in the name, image and price.</p>
+                <img id="product_image_preview" alt="Product image preview" referrerpolicy="no-referrer" hidden />
+                <div class="input-row">
+                    <div class="field full"><label class="field-label" for="f_title">Item name <span class="required">*</span></label><input id="f_title" class="input" aria-label="Item name" placeholder="What’s on your wishlist?" /></div>
+                </div>
+                <div class="input-row">
+                    <div class="field half"><label class="field-label" for="f_price">Price <span class="optional">AUD · optional</span></label><input id="f_price" class="input" inputmode="decimal" aria-label="Price in AUD" placeholder="Price (AUD)" /></div>
+                    <div class="field half"><label class="field-label" for="f_image">Image link <span class="optional">optional</span></label><input id="f_image" class="input" type="url" aria-label="Image URL" placeholder="https://…" /></div>
+                </div>
+                <div class="input-row">
+                    <div class="field full"><label class="field-label" for="f_notes">The little details <span class="optional">optional</span></label><textarea id="f_notes" class="input" rows="2" placeholder="Size, colour, or anything your gift giver should know"></textarea></div>
+                </div>
+                <div class="row form-actions"><button id="btn_add" type="button">Add to my wishlist</button></div>
+            </section>
+            <p id="msg_add" class="muted feedback" role="status" aria-live="polite"></p>
+            <div id="notice" class="muted" role="status" aria-live="polite"></div>
+            <div id="root" class="grid"></div>
+        </main>
+        <footer class="site-footer"><span>A few hints. A happy surprise.</span><span>Made for giving <span aria-hidden="true">✧</span></span></footer>
     </div>
-
-    <!-- Greeting OUTSIDE the add box -->
-    <p id="greeting" class="greeting" hidden></p>
-    <div id="event-info"></div>
-    <div id="draw-info"></div>
-
-    <!-- Toggle for add form -->
-    <div id="addToggleRow" class="row" hidden>
-        <!-- <button id="btn_toggle_add" type="button">Add an item</button> -->
-        <button id="btn_toggle_add" role="button">Add an item</button>
-    </div>
-
-    <!-- Global add form -->
-    <div id="addForm" class="add-wrap" hidden>
-        <div class="form-title">I’d like to receive:</div>
-        <div class="input-row product-link-row">
-            <input id="f_url" class="input" type="url" aria-label="Product link" placeholder="Paste a product link (optional)" />
-            <button id="btn_product_lookup" type="button" disabled>Get details</button>
-        </div>
-        <p id="product_lookup_status" class="muted" role="status" aria-live="polite">Paste a product link to fill in the name, image and price.</p>
-        <img id="product_image_preview" alt="Product image preview" referrerpolicy="no-referrer" hidden />
-        <div class="input-row">
-            <input id="f_title" class="input full" aria-label="Item name" placeholder="Title *" />
-        </div>
-        <div class="input-row">
-            <input id="f_price" class="input half" aria-label="Price in AUD" placeholder="Price (AUD)" />
-            <input id="f_image" class="input half" aria-label="Image URL" placeholder="Image URL (optional)" />
-        </div>
-        <div class="input-row">
-            <textarea id="f_notes" class="input full" rows="2" style="font-family: Arial;"
-                placeholder="Notes (size, color, etc.)"></textarea>
-        </div>
-        <div class="row">
-            <button id="btn_add">Add to my wishlist</button>
-            <span id="msg_add" class="muted"></span>
-        </div>
-    </div>
-
-
-    <div id="notice" class="muted" style="margin:10px 0;"></div>
-    <div id="root" class="grid"></div>
 
     <script src="/product-preview.js" defer></script>
     <script>
@@ -727,11 +110,6 @@
         function fmtWholeDollars(cents) {
             if (cents == null || isNaN(cents)) return null;
             return `$${(cents / 100).toFixed(0)}`;
-        }
-        function joinWithOr(parts) {
-            if (parts.length <= 1) return parts.join('');
-            if (parts.length === 2) return parts.join(' or ');
-            return parts.slice(0, -1).join(', ') + ' or ' + parts.slice(-1);
         }
 
         const LS_KEY = 'kk_wl_collapsed_v1'; // { [ownerId]: true|false }  true = collapsed
@@ -779,10 +157,6 @@
             if (!resp.ok) throw new Error(out.error || 'Failed to add');
         }
 
-        function fmtDollars(cents) {
-            if (cents == null || isNaN(cents) || cents <= 0) return '';
-            return `$${(cents / 100).toFixed(0)}`;
-        }
 
         function fmtDate(s) {
             if (!s) return '';
@@ -899,158 +273,63 @@
             // <title>
             document.title = `${eventNamePretty} Wishlists`;
 
-            // <h1>
-            const h1 = document.querySelector('h1');
-            if (h1) h1.textContent = `${eventNamePretty} Wishlists`;
-
-            inPrice.placeholder = "Price (AUD)";
-
-            // // Build: "Budgets are $50 for Gift 1 or $25 for Gift 2"
-            // const tiers = Array.isArray(data.tiers) ? data.tiers : [];
-            // const pieces = tiers.map(t => {
-            //     const b = fmtWholeDollars(t.budget_cents);
-            //     return b ? `${b} for ${t.name}` : null;
-            // }).filter(Boolean);
-
-            // if (pieces.length > 0) {
-            //     const budgetsText = joinWithOr(pieces);
-            //     inPrice.placeholder = `Gift Price (Budgets are ${budgetsText})`;
-            //     inPrice.title = `Budgets are ${budgetsText}`;
-            // } else if (tiers.length > 0) {
-            //     // No budgets set, just show tier names
-            //     const names = joinWithOr(tiers.map(t => t.name));
-            //     inPrice.placeholder = `Gift Price (${names})`;
-            //     inPrice.title = names;
-            // } else {
-            //     // Fallback
-            //     inPrice.placeholder = 'Gift Price (e.g. 49.99)';
-            //     inPrice.title = '';
-            // }
-
-            // Greeting outside the box (unchanged)
+            document.getElementById('event-name').textContent = rawEvent;
+            inPrice.placeholder = 'Price (AUD)';
             const meName = data.me?.name || 'there';
-            greetEl.textContent = `Hi ${meName}! Welcome :)`;
+            greetEl.textContent = `Hi ${meName}, let’s make someone’s day.`;
             greetEl.hidden = false;
 
-            // Build one combined card just under the greeting
             const infoHost = document.getElementById('event-info');
-            infoHost.innerHTML = ''; // reset
-            const card = document.createElement('div');
-            card.className = 'add-wrap';
-            card.style.marginTop = '8px';
-
-            // helpers
-            const addLine = (text, indent = 0, isBold = false) => {
+            infoHost.replaceChildren();
+            const eventCard = document.createElement('section');
+            eventCard.className = 'event-card';
+            const eventHeading = document.createElement('h2');
+            eventHeading.className = 'eyebrow';
+            eventHeading.textContent = 'THE GET-TOGETHER';
+            const eventTitle = document.createElement('p');
+            eventTitle.className = 'event-title';
+            eventTitle.textContent = rawEvent;
+            const details = document.createElement('dl');
+            details.className = 'event-details';
+            for (const [label, value] of [['When', data.event?.date ? fmtDate(data.event.date) : 'Date to come'], ['Where', data.event?.location || 'Details to come']]) {
                 const line = document.createElement('div');
-                line.style.marginLeft = `${indent * 16}px`;
-                line.style.lineHeight = '1.4';
-                if (isBold) {
-                    const b = document.createElement('strong');
-                    b.textContent = text;
-                    line.appendChild(b);
-                } else {
-                    line.textContent = text;
-                }
-                card.appendChild(line);
-            };
-
-            const addLabelValue = (label, value, indent = 0) => {
-                const line = document.createElement('div');
-                line.style.marginLeft = `${indent * 16}px`;
-                line.style.lineHeight = '1.4';
-
-                const strong = document.createElement('strong');
-                strong.textContent = `${label}: `;
-
-                const span = document.createElement('span');
-                span.textContent = value;
-
-                line.append(strong, span);
-                card.appendChild(line);
-            };
-
-            // ----- Event Info -----
-            addLine('Event Info:', 0, true);
-
-            const name = data.event?.name || '—';
-            addLabelValue('Name', name, 1);
-
-            const d = data.event?.date ? fmtDate(data.event.date) : '—';
-            addLabelValue('Date', d, 1);
-
-            const loc = data.event?.location || '—';
-            addLabelValue('Location', loc, 1);
-
-            // ----- Draw Info -----
-            const drawn = !!data.me?.has_drawn;
-            const rbt = Array.isArray(data.recipients_by_tier) ? data.recipients_by_tier : [];
-            const base = location.origin;
-            const myToken = data.me?.invite_token;
-
-            if (drawn && rbt.length > 0) {
-                // Bold the whole header line
-                addLine(`Your Recipients:`, 1, true);
-
-                const fmtWhole = (cents) =>
-                    (typeof cents === 'number' && cents > 0) ? `$${(cents / 100).toFixed(0)}` : '';
-
-                for (const t of rbt) {
-                    const budget = fmtWhole(t.budget_cents);
-                    const label = budget ? `${t.name} (${budget})` : t.name; // e.g., "Gift 1 ($100)"
-                    // Bold the gift label, normal recipient
-                    const line = document.createElement('div');
-                    line.style.marginLeft = `${2 * 16}px`;
-                    line.style.lineHeight = '1.4';
-
-                    const strong = document.createElement('strong');
-                    strong.textContent = `${label}: `;
-
-                    const span = document.createElement('span');
-                    span.textContent = t.recipient || '—';
-
-                    line.append(strong, span);
-                    card.appendChild(line);
-                }
-            } else {
-                const warn = document.createElement('div');
-                warn.style.marginTop = '4px';
-                warn.style.padding = '8px 10px';
-                warn.style.border = '1px solid #fecaca';
-                warn.style.background = '#fef2f2';
-                warn.style.color = '#991b1b';
-                warn.style.borderRadius = '10px';
-
-                const msg = document.createElement('div');
-                msg.style.marginBottom = '10px';
-                msg.style.whiteSpace = 'pre-line';
-                msg.textContent = `You haven't drawn your names yet.`;
-
-                const link = myToken ? `${base}/?token=${encodeURIComponent(myToken)}` : `${base}/`;
-                const btn = document.createElement('button');
-                btn.type = 'button';
-                btn.textContent = 'Draw names now';
-                btn.onclick = () => { location.href = link; };
-
-                warn.append(msg, btn);
-                card.append(warn);
+                const term = document.createElement('dt'); term.textContent = label;
+                const description = document.createElement('dd'); description.textContent = value;
+                line.append(term, description); details.append(line);
             }
+            eventCard.append(eventHeading, eventTitle, details);
 
-            infoHost.appendChild(card);
+            const recipientsCard = document.createElement('section');
+            recipientsCard.className = 'recipients-card';
+            const recipientsHeading = document.createElement('h2');
+            recipientsHeading.className = 'eyebrow';
+            recipientsHeading.textContent = 'YOU’RE GIFTING TO';
+            recipientsCard.append(recipientsHeading);
+            const recipients = Array.isArray(data.recipients_by_tier) ? data.recipients_by_tier : [];
+            for (const tier of recipients) {
+                const line = document.createElement('div'); line.className = 'recipient-line';
+                const name = document.createElement('span'); name.className = 'recipient-name'; name.textContent = tier.recipient || '—';
+                const gift = document.createElement('span'); gift.className = 'recipient-tier';
+                gift.textContent = `${tier.name}${tier.budget_cents != null ? ` · ${fmtWholeDollars(tier.budget_cents)}` : ''}`;
+                line.append(name, gift); recipientsCard.append(line);
+            }
+            infoHost.append(eventCard, recipientsCard);
 
             // Show the reveal button; keep form hidden until clicked
             toggleRow.hidden = false;
             addWrap.hidden = true;
+            btnToggleAdd.textContent = 'Add an item';
+            btnToggleAdd.setAttribute('aria-expanded', 'false');
             btnToggleAdd.onclick = () => {
                 const willShow = addWrap.hidden;
                 addWrap.hidden = !willShow;
-                btnToggleAdd.textContent = 'Add an item';
+                btnToggleAdd.textContent = willShow ? 'Close' : 'Add an item';
                 btnToggleAdd.setAttribute('aria-expanded', String(willShow));
                 if (willShow) {
                     inUrl?.focus?.();
                 }
             };
 
-            // Continue as before…
             renderAll(data);
 
         }
@@ -1094,25 +373,27 @@
 
             ordered.forEach(({ owner, items }) => {
 
-                const card = document.createElement('div'); card.className = 'card';
+                const card = document.createElement('section'); card.className = 'card';
+                if (owner.id === meId) card.classList.add('my-wishlist');
+                else if (allowed.has(owner.id)) card.classList.add('recipient-wishlist');
 
                 // Header with name/pill on left, collapse on right
                 const header = document.createElement('div'); header.className = 'card-header';
                 const left = document.createElement('div'); left.className = 'left';
-                const nameEl = document.createElement('div'); nameEl.className = 'owner'; nameEl.textContent = owner.name;
+                const nameEl = document.createElement('h3'); nameEl.className = 'owner'; nameEl.textContent = owner.name;
                 left.appendChild(nameEl);
 
-                // 🎁 only if this owner is MY recipient
+                // Mark the people this participant is gifting to.
                 if (allowed.has(owner.id) && owner.id !== meId) {
                     const giftEl = document.createElement('span');
                     giftEl.className = 'gift-emoji';
-                    giftEl.textContent = '\uD83C\uDF81'; // &#127873;
+                    giftEl.textContent = 'Gifting to';
                     giftEl.setAttribute('aria-label', 'Your recipient');
                     left.appendChild(giftEl);
                 }
 
                 if (owner.id === meId) {
-                    const pill = document.createElement('span'); pill.className = 'pill gray'; pill.textContent = 'you';
+                    const pill = document.createElement('span'); pill.className = 'pill gray'; pill.textContent = 'Your list';
                     left.appendChild(pill);
                 }
                 const right = document.createElement('div'); right.className = 'right';
@@ -1127,6 +408,7 @@
                 panel.id = sectionId;
                 const wasCollapsed = (collapsedMap[owner.id] !== undefined) ? !!collapsedMap[owner.id] : true; // 👈 default collapsed
                 panel.className = `collapse ${wasCollapsed ? 'collapsed' : 'expanded'}`;
+                panel.inert = wasCollapsed;
                 if (!wasCollapsed) {
                     panel.className = 'collapse expanded';
                     panel.style.maxHeight = 'none';
@@ -1159,7 +441,8 @@
                     toggle.append(chev, label, badge);
 
                     toggle.onclick = () => {
-                        const isExpanded = panel.classList.contains('expanded');
+                        const isExpanded = toggle.getAttribute('aria-expanded') === 'true';
+                        panel.inert = isExpanded;
 
                         if (isExpanded) {
                             collapse(panel);
@@ -1188,7 +471,6 @@
 
                         // My items: toolbar with Edit + Delete + inline editor
                         if (owner.id === meId) {
-                            // Floating toolbar
                             const bar = document.createElement('div');
                             bar.className = 'item-toolbar';
                             box.classList.add('has-toolbar');
@@ -1216,7 +498,7 @@
                             const inNotesE = document.createElement('textarea'); inNotesE.className = 'input'; inNotesE.rows = 2; inNotesE.placeholder = 'Notes'; inNotesE.value = it.notes || '';
 
                             const actions = document.createElement('div'); actions.className = 'edit-actions';
-                            const saveBtn = document.createElement('button'); saveBtn.className = 'btn-lite'; saveBtn.style = 'background-color: #27ae60; color: white;'; saveBtn.textContent = 'Update';
+                            const saveBtn = document.createElement('button'); saveBtn.className = 'btn-primary'; saveBtn.textContent = 'Update';
                             const cancelBtn = document.createElement('button'); cancelBtn.className = 'btn-lite'; cancelBtn.textContent = 'Cancel';
                             const msg = document.createElement('span'); msg.className = 'muted';
 
@@ -1273,14 +555,14 @@
 
                         // Display content
                         const title = document.createElement('div');
-                        title.style.fontWeight = '600';
-                        title.style.margin = '4px 0';
+                        title.className = 'item-title';
                         title.textContent = it.title;
                         box.appendChild(title);
 
                         if (it.image_url) {
                             const img = document.createElement('img');
-                            img.src = it.image_url; img.alt = it.title;
+                            img.src = it.image_url; img.alt = it.title; img.loading = 'lazy'; img.referrerPolicy = 'no-referrer';
+                            img.className = 'item-image';
                             box.appendChild(img);
                         }
                         if (it.url) {
@@ -1294,10 +576,10 @@
                         }
 
                         if (it.notes) {
-                            const notes = document.createElement('div'); notes.textContent = it.notes; box.appendChild(notes);
+                            const notes = document.createElement('div'); notes.className = 'item-notes'; notes.textContent = it.notes; box.appendChild(notes);
                         }
                         if (it.price_cents != null) {
-                            const pr = document.createElement('div'); pr.className = 'muted'; pr.textContent = fmtPrice(it.price_cents); box.appendChild(pr);
+                            const pr = document.createElement('div'); pr.className = 'item-price'; pr.textContent = fmtPrice(it.price_cents); box.appendChild(pr);
                         }
 
                         const row = document.createElement('div'); row.className = 'row';
@@ -1326,7 +608,7 @@
 
                 } else {
                     // No items: just header + empty state (still track collapsed state)
-                    const empty = document.createElement('div'); empty.className = 'muted'; empty.textContent = 'No items yet';
+                    const empty = document.createElement('div'); empty.className = 'empty-state'; empty.textContent = owner.id === meId ? 'Your next great gift starts with a little hint. Add your first idea above.' : 'A little inspiration is on its way. No wishes added yet.';
                     card.appendChild(empty);
                 }
 
