@@ -243,6 +243,17 @@
             flex: 1 1 100%;
         }
 
+        .product-link-row .input { flex: 1 1 220px; }
+        .product-link-row button { flex: 0 0 auto; }
+        #product_lookup_status { margin: 6px 0 10px; font-size: 14px; }
+        #product_image_preview {
+            max-width: 180px;
+            max-height: 180px;
+            object-fit: contain;
+            border-radius: 8px;
+            margin: 4px 0 8px;
+        }
+
         .greeting {
             font-size: 18px;
             /* larger */
@@ -655,16 +666,21 @@
     <!-- Global add form -->
     <div id="addForm" class="add-wrap" hidden>
         <div class="form-title">I’d like to receive:</div>
+        <div class="input-row product-link-row">
+            <input id="f_url" class="input" type="url" aria-label="Product link" placeholder="Paste a product link (optional)" />
+            <button id="btn_product_lookup" type="button" disabled>Get details</button>
+        </div>
+        <p id="product_lookup_status" class="muted" role="status" aria-live="polite">Paste a product link to fill in the name, image and price.</p>
+        <img id="product_image_preview" alt="Product image preview" referrerpolicy="no-referrer" hidden />
         <div class="input-row">
-            <input id="f_title" class="input full" placeholder="Title *" />
+            <input id="f_title" class="input full" aria-label="Item name" placeholder="Title *" />
         </div>
         <div class="input-row">
-            <input id="f_url" class="input half" placeholder="Product link (optional)" />
-            <input id="f_price" class="input half" placeholder="Target price (e.g. 49.99)" />
+            <input id="f_price" class="input half" aria-label="Price in AUD" placeholder="Price (AUD)" />
+            <input id="f_image" class="input half" aria-label="Image URL" placeholder="Image URL (optional)" />
         </div>
         <div class="input-row">
-            <input id="f_image" class="input half" placeholder="Image URL (optional)" />
-            <textarea id="f_notes" class="input half input" rows="2" style="font-family: Arial;"
+            <textarea id="f_notes" class="input full" rows="2" style="font-family: Arial;"
                 placeholder="Notes (size, color, etc.)"></textarea>
         </div>
         <div class="row">
@@ -677,6 +693,7 @@
     <div id="notice" class="muted" style="margin:10px 0;"></div>
     <div id="root" class="grid"></div>
 
+    <script src="/product-preview.js" defer></script>
     <script>
         const qs = new URLSearchParams(location.search);
         const token = qs.get('token');
@@ -703,7 +720,7 @@
         function fmtPrice(cents) { return (cents == null || isNaN(cents)) ? '' : `$${(cents / 100).toFixed(2)}`; }
         function centsFromPrice(p) {
             if (!p) return null;
-            const n = Number(String(p).replace(/[$,\\s]/g, ''));
+            const n = Number(String(p).replace(/[$,\s]/g, ''));
             return Number.isFinite(n) ? Math.round(n * 100) : null;
         }
 
@@ -860,6 +877,7 @@
                     price: inPrice.value,
                     image_url: inImage.value
                 });
+                window.wishlistProductPreview?.reset();
                 inTitle.value = inUrl.value = inNotes.value = inPrice.value = inImage.value = '';
                 msgAdd.textContent = 'Added!';
                 await loadAll();
@@ -885,7 +903,7 @@
             const h1 = document.querySelector('h1');
             if (h1) h1.textContent = `${eventNamePretty} Wishlists`;
 
-            inPrice.placeholder = "Price";
+            inPrice.placeholder = "Price (AUD)";
 
             // // Build: "Budgets are $50 for Gift 1 or $25 for Gift 2"
             // const tiers = Array.isArray(data.tiers) ? data.tiers : [];
@@ -1028,7 +1046,7 @@
                 btnToggleAdd.textContent = 'Add an item';
                 btnToggleAdd.setAttribute('aria-expanded', String(willShow));
                 if (willShow) {
-                    inTitle?.focus?.();
+                    inUrl?.focus?.();
                 }
             };
 

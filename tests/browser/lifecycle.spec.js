@@ -12,6 +12,8 @@ test('email invitation → draw → wishlist → private reservations → edit a
     for (const person of people) {
       const context = await browser.newContext({ ...testInfo.project.use, reducedMotion: 'reduce' });
       contexts.push(context);
+      await context.route('**/api/wishlist/preview', route => route.fulfill({ status: 422,
+        json: { error: 'Test product has no automatic details. Enter them below.' } }));
       person.page = await context.newPage();
       person.page.on('pageerror', error => errors.push(error.message));
       const email = server.emails().find(mail => mail.to[0].address === person.email);

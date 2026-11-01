@@ -5,6 +5,8 @@ const { randomUUID } = require("crypto");
 require("dotenv").config();
 const { transporter, fromEmail } = require('./lib/email');
 const { seedAssignments } = require('./lib/assignments');
+const { createProductPreview } = require('./lib/product-preview');
+const { PreviewError } = require('./lib/public-page');
 
 if (!process.env.ADMIN_SECRET) {
   throw new Error('Set ADMIN_SECRET before starting the server');
@@ -737,6 +739,23 @@ app.use(['/api/wishlist', '/api/wishlists'], (req, res, next) => {
 });
 
 const ownerItemColumns = 'id, wishlist_id, title, url, notes, price_cents, image_url, created_at, updated_at';
+
+const productPreview = createProductPreview();
+const previewRequests = new Map();
+app.post('/api/wishlist/preview', async (req, res) => {
+  const me = requireMeByToken(req.query.token || req.body?.token);
+  const now = Date.now();
+  for (const [id, usage] of previewRequests) if (usage.expires <= now) previewRequests.delete(id);
+  const usage = previewRequests.get(me.pid) || { count: 0, expires: now + 60000 };
+  if (++usage.count > 20) return res.status(429).json({ error: 'Please wait a minute before looking up more products. You can still add items manually.' });
+  previewRequests.set(me.pid, usage);
+  try {
+    res.json({ product: await productPreview(req.body?.url) });
+  } catch (error) {
+    res.status(error instanceof PreviewError ? error.status : 422).json({ error: error instanceof PreviewError
+      ? error.message : 'Could not read this product page. You can enter the item details below.' });
+  }
+});
 
 // --- Wishlist: me (owner/manage) ---
 app.get('/api/wishlist/me', (req, res) => {

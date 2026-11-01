@@ -20,6 +20,10 @@ npm run event:invite     # Send/resend invitations for the saved event
 npm run event:wishlists  # Send wishlist reminder emails
 ```
 
+In **Add an item**, paste a product link to fill its name, image and price
+automatically. You can edit the details or enter them yourself if a shop blocks
+the lookup.
+
 For local development and automated tests:
 
 ```sh

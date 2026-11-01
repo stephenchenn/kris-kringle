@@ -284,8 +284,23 @@ event reuse, manual-curl event adoption, reminders, partial email failures, and
 interrupted requests. `npm run test:e2e` checks the flow in desktop and mobile Chrome with
 separate participant sessions. Both use temporary databases and captured email.
 
-Automatic recommended images from product URLs remain deferred. Manual product
-links and image URLs work as before.
+## Add wishlist items from product links
+
+Open **Add an item** and paste a product URL. The form automatically looks up
+the name, product image and price. **Get details** lets you retry. Review or edit
+the filled fields, add size/colour notes, then select **Add to my wishlist**.
+Pasting a link only previews details; it does not save an item until you add it.
+
+The lookup reads public product data (JSON-LD, Open Graph or microdata) without
+requiring a paid service or an API key. Some stores block automated requests or
+only provide details through JavaScript. If a lookup fails or a field is missing,
+enter it manually. Your edits are kept when a lookup finishes or you change the
+link. Prices are entered in AUD; a page listing another currency shows its price
+for reference and leaves the AUD field for you to fill in.
+
+This works for both desktop and mobile. Automated tests cover metadata parsing,
+private-address and redirect blocking, request limits, editable autofill, image
+preview, manual fallback, slow responses and saving the resulting item.
 
 References: [Render web services](https://render.com/docs/web-services),
 [persistent disks](https://render.com/docs/disks), and
