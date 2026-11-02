@@ -83,12 +83,18 @@ Google documents [SMTP settings](https://support.google.com/mail/answer/7104828)
 
 ### If invitations go to Spam
 
+When testing delivery to your own accounts, leave their contacts, filters and
+spam feedback unchanged. Marking a test message as **Not spam** or allowlisting
+the sender biases later results. A Gmail plus alias shares its original inbox;
+it is not an independent deliverability test. Check the receiving inbox rather
+than treating delivery back to the sending account as proof.
+
 All three email types include plain-text and HTML versions. SMTP requires TLS,
 and the From display name should identify the organiser so family members
 recognise the sender. These improve message quality; they do not guarantee
 inbox placement.
 
-For Gmail and Google Workspace recipients:
+For actual family recipients who want to recover a legitimate message:
 
 1. In the recipient's Spam folder, select the invitation and choose **Not spam**.
 2. Add the exact Gmail sender address (the address in `SMTP_USER`) to Contacts.
@@ -113,6 +119,36 @@ SMTP setup authenticates correctly for that message, but does not prove inbox
 placement for future messages or other recipients. Follow Google's
 [sender guidelines](https://support.google.com/mail/answer/81126) and avoid
 repeated mass resends while testing.
+
+### Read test inbox placement over IMAP
+
+You can check a test recipient with its own Google app password, just as the
+sending account uses its own app password. Enable 2-Step Verification and create
+an app password in the **recipient's Google account**, then run locally:
+
+```sh
+npm run email:connect -- your-test-recipient@gmail.com
+```
+
+Enter the app password at the hidden terminal prompt. It is verified before
+being saved in `.local/email-test-accounts.json`, a Git-ignored file with
+owner-only permissions. Do not put this test credential on Render or paste it
+into chat. Connect a second test account with the same command and its address.
+The helper uses Python 3.9 or later and its standard library; no packages are
+needed.
+
+To inspect the latest Kris Kringle messages in each connected test account:
+
+```sh
+npm run email:check
+npm run email:check -- --subject 'KK delivery check'
+```
+
+This uses IMAP **EXAMINE** and **BODY.PEEK** to fetch headers in Inbox and Spam.
+It does not fetch message bodies, mark messages read, move mail, alter filters,
+add contacts or train spam classification. The output includes original folder
+placement and SPF/DKIM/DMARC results where supplied by the receiving server.
+Timestamps are displayed in Australia/Adelaide time.
 
 ### Other free options
 

@@ -10,6 +10,8 @@
     "event:invite": "node scripts/event.js invite",
     "event:wishlists": "node scripts/event.js wishlists",
     "event:links": "node scripts/event.js links",
+    "email:connect": "python3 scripts/email-delivery.py connect",
+    "email:check": "python3 scripts/email-delivery.py check",
     "start": "node server.js",
     "dev": "node --watch server.js"
   },
