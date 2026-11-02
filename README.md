@@ -16,6 +16,7 @@ Running it again keeps the same draws and skips invitations it already sent.
 
 ```sh
 npm run event:links      # Show everyone's personal draw and wishlist links
+npm run event:status     # Check who has drawn and who is still waiting
 npm run event:invite     # Send/resend invitations for the saved event
 npm run event:wishlists  # Send wishlist reminder emails
 ```

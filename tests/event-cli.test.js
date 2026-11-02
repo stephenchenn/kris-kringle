@@ -253,3 +253,57 @@ test('an interrupted email request releases the lock and does not resend automat
   assert.match(repeated.stderr, /previous invitation request may have sent some emails/);
   assert.equal(mailRequests, 1);
 });
+
+test('event status checks live draw progress without emails or file/database changes', async t => {
+  const server = await startServer();
+  t.after(async () => { await server.stop(); server.remove(); });
+  const input = config(server.secret);
+  const seeded = await server.request('POST', '/api/admin/seed', input);
+  const file = path.join(server.directory, 'event-cli.json');
+  const resultFile = path.join(server.directory, 'event-cli-result.json');
+  write(resultFile, seeded.data);
+  // Status does not need a config file or admin secret: only saved invitations.
+  const beforeFiles = fs.readdirSync(server.directory).sort();
+  const beforeResult = fs.readFileSync(resultFile, 'utf8');
+  const db = new Database(path.join(server.directory, 'db.sqlite'), { readonly: true });
+  t.after(() => db.close());
+  const beforePeople = db.prepare('SELECT * FROM participants ORDER BY id').all();
+  const beforeAssignments = db.prepare('SELECT * FROM assignments ORDER BY id').all();
+  const waiting = await run('status', file, server.baseUrl);
+  assert.equal(waiting.code, 0, waiting.stderr);
+  assert.match(waiting.stdout, /Drawn: 0\/4 \| Waiting: 4/);
+  assert.deepEqual(db.prepare('SELECT * FROM participants ORDER BY id').all(), beforePeople);
+  assert.deepEqual(db.prepare('SELECT * FROM assignments ORDER BY id').all(), beforeAssignments);
+  assert.equal(server.emails().length, 0);
+  const token = new URL(seeded.data.invites[0].link).searchParams.get('token');
+  await server.request('POST', '/api/draw', { token });
+  const mixed = await run('status', file, server.baseUrl);
+  assert.equal(mixed.code, 0, mixed.stderr);
+  assert.match(mixed.stdout, /Alex.*Drawn/);
+  assert.match(mixed.stdout, /Blair.*Waiting/);
+  assert.match(mixed.stdout, /Drawn: 1\/4 \| Waiting: 3/);
+  for (const person of seeded.data.invites) assert(!mixed.stdout.includes(new URL(person.link).searchParams.get('token')));
+  assert(!mixed.stdout.includes(server.secret));
+  assert.equal(fs.readFileSync(resultFile, 'utf8'), beforeResult);
+  assert.deepEqual(fs.readdirSync(server.directory).sort(), [...beforeFiles, 'emails'].sort());
+  assert.equal(db.prepare('SELECT SUM(has_drawn) n FROM participants').get().n, 1);
+  assert.deepEqual(db.prepare('SELECT * FROM assignments ORDER BY id').all(), beforeAssignments);
+
+  await server.request('POST', '/api/admin/reset', { secret: server.secret });
+  const missing = await run('status', file, server.baseUrl);
+  assert.equal(missing.code, 1);
+  assert.match(missing.stdout, /Drawn: 0\/4 \| Waiting: 0 \| Unavailable: 4/);
+  assert.match(missing.stderr, /Invitation no longer exists/);
+});
+
+test('status rejects invitations from another server before contacting it', async t => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'kringle-status-invalid-'));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const file = path.join(directory, 'event-cli.json');
+  write(path.join(directory, 'event-cli-result.json'), { event: { id: 'test', name: 'Test' },
+    invites: [{name:'Alex',email:'alex@example.test',link:'https://other.example.test/draw?token=private-token'}] });
+  const result = await run('status', file, 'http://127.0.0.1:1');
+  assert.equal(result.code, 1);
+  assert.match(result.stderr, /do not match this server/);
+  assert(!result.stderr.includes('private-token'));
+});

@@ -12,6 +12,7 @@ Commands:
   invite       Send or resend invitations for the saved event
   wishlists    Send wishlist reminder emails for the saved event
   links        Print the saved personal draw and wishlist links
+  status       Check who has drawn and who is still waiting (read-only)
 
 Options:
   --file PATH  Event JSON (default: .local/event-2026.json)
@@ -77,6 +78,48 @@ function fingerprint(value) {
   return createHash('sha256').update(JSON.stringify(normalized)).digest('hex');
 }
 
+async function showStatus(result, baseUrl) {
+  if (!result?.event?.id || !Array.isArray(result.invites) || !result.invites.length) {
+    throw new Error('No saved event. Create the event first with npm run event:create.');
+  }
+  const people = result.invites.map(person => {
+    const link = new URL(person.link);
+    const token = link.searchParams.get('token');
+    if (link.origin !== baseUrl || link.pathname !== '/draw' || !token) {
+      throw new Error('Saved invitations do not match this server. Check --url.');
+    }
+    return { ...person, token };
+  });
+  const rows = await Promise.all(people.map(async person => {
+    try {
+      const response = await fetch(`${baseUrl}/api/me?token=${encodeURIComponent(person.token)}`, {
+        cache: 'no-store', redirect: 'error', signal: AbortSignal.timeout(30000),
+      });
+      if (response.status === 404) throw new Error('Invitation no longer exists; the event may have been reset.');
+      if (!response.ok) throw new Error(`Status check returned HTTP ${response.status}.`);
+      const data = await response.json();
+      if (data.event?.id !== result.event.id || typeof data.me?.has_drawn !== 'boolean') {
+        throw new Error('Server returned incomplete status or a different event.');
+      }
+      return { Participant: data.me.name, Email: data.me.email, Status: data.me.has_drawn ? 'Drawn' : 'Waiting' };
+    } catch (error) {
+      return { Participant: person.name, Email: person.email, Status: 'Unavailable',
+        error: error.name === 'TimeoutError' ? 'Status check timed out.' : error.message };
+    }
+  }));
+  const drawn = rows.filter(row => row.Status === 'Drawn').length;
+  const waiting = rows.filter(row => row.Status === 'Waiting').length;
+  const unavailable = rows.filter(row => row.Status === 'Unavailable');
+  console.log(`Server: ${baseUrl}\nEvent: ${result.event.name} (${result.event.id})`);
+  console.table(rows.map(({ Participant, Email, Status }) => ({ Participant, Email, Status })));
+  console.log(`Drawn: ${drawn}/${people.length} | Waiting: ${waiting}${unavailable.length ? ` | Unavailable: ${unavailable.length}` : ''}`);
+  console.log(`Checked live at ${new Date().toISOString()}`);
+  if (unavailable.length) {
+    for (const row of unavailable) console.error(`${row.Participant}: ${row.error}`);
+    throw new Error('Some participant statuses could not be checked.');
+  }
+}
+
 async function main() {
   const { values, positionals } = parseArgs({ options: {
     file: { type: 'string', default: '.local/event-2026.json' },
@@ -85,7 +128,7 @@ async function main() {
   }, allowPositionals: true });
   if (values.help) { console.log(HELP); return; }
   const command = positionals[0];
-  if (positionals.length !== 1 || !['create', 'invite', 'wishlists', 'links'].includes(command)) throw new Error(HELP);
+  if (positionals.length !== 1 || !['create', 'invite', 'wishlists', 'links', 'status'].includes(command)) throw new Error(HELP);
   if ((values.new || values['no-email']) && command !== 'create') throw new Error('--new and --no-email apply to event:create only.');
   const server = new URL(values.url);
   if (!['http:', 'https:'].includes(server.protocol) || server.username || server.password ||
@@ -99,6 +142,10 @@ async function main() {
   const stateFile = path.join(directory, `${stem}-state.json`);
   const sendFile = path.join(directory, stem.startsWith('event-') ? `send-${stem.slice(6)}.json` : `${stem}-send.json`);
   const lockFile = path.join(directory, `${stem}.lock`);
+  if (command === 'status') {
+    await showStatus(readJson(resultFile, true), baseUrl);
+    return;
+  }
   const config = readJson(filename);
   const payload = definition(config);
   const hash = fingerprint(payload);

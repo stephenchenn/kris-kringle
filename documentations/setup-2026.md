@@ -311,6 +311,19 @@ To view the personal links at any time:
 npm run event:links
 ```
 
+To check the event's draw progress:
+
+```sh
+npm run event:status
+```
+
+This reads the saved event and checks live status for every participant, printing
+their name, email, and **Drawn** or **Waiting**, plus totals. **Drawn** means the
+participant has revealed their recipients. It does not draw for anyone or send
+emails. Failed checks are shown as **Unavailable**, rather than being counted as
+waiting. It uses the saved result even if you have started editing the event JSON
+for another event. The command also accepts the same `--file` and `--url` options.
+
 Participants open their invitation, draw, then use the wishlist button. Test
 wishlist add/edit/delete and private reservations using the checklist in the
 local demo section above. To email everyone their wishlist links:
