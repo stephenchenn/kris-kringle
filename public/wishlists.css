@@ -38,6 +38,17 @@ h2:not(.eyebrow) { font: 400 31px/1.2 Georgia, serif; letter-spacing: -.6px; mar
 .input:focus { outline: 2px solid #63846a; outline-offset: 2px; }
 textarea.input { resize: vertical; line-height: 1.6; }
 #product_lookup_status { line-height: 1.6; font-size: 12px; margin: 8px 0 18px; }
+.lookup-status { color: var(--muted); }
+.lookup-status.is-loading { display: flex; align-items: center; gap: 16px; padding: 16px 18px; background: var(--soft); border: 1px solid #cfddc7; border-left: 4px solid var(--green); border-radius: 9px; }
+.lookup-title { display: block; color: var(--ink); font-size: 15px; margin-bottom: 3px; }
+.lookup-dots { display: flex; gap: 5px; flex-shrink: 0; padding: 6px 0; }
+.lookup-dots > span { width: 7px; height: 7px; border-radius: 50%; background: var(--green); animation: lookup-pulse 1.2s ease-in-out infinite; }
+.lookup-dots > span:nth-child(2) { animation-delay: .16s; }
+.lookup-dots > span:nth-child(3) { animation-delay: .32s; }
+@keyframes lookup-pulse {
+    0%, 70%, 100% { transform: translateY(0); opacity: .35; }
+    35% { transform: translateY(-4px); opacity: 1; }
+}
 #product_image_preview { width: 120px; height: 120px; object-fit: contain; background: white; border: 1px solid var(--line); border-radius: 9px; padding: 8px; margin-bottom: 14px; }
 .form-actions { padding-top: 6px; }
 .feedback:empty, #notice:empty { display: none; }
@@ -49,6 +60,10 @@ textarea.input { resize: vertical; line-height: 1.6; }
 .recipient-wishlist .card-header { border-top-color: #cda37a; }
 .left { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
 .owner { font-size: 15px; font-weight: 600; width: 100%; overflow-wrap: anywhere; }
+.owner-heading { display: flex; align-items: baseline; gap: 7px; width: 100%; min-width: 0; }
+.owner-heading .owner { width: auto; min-width: 0; }
+.name-emoji { display: inline-block; font-size: 17px; flex-shrink: 0; line-height: 1; }
+.recipient-name .name-emoji { margin-right: 7px; }
 .right { flex-shrink: 0; }
 .pill, .gift-emoji { display: inline-flex; align-items: center; border-radius: 4px; padding: 3px 6px; font-size: 10px; line-height: 1.4; }
 .pill.gray { background: #edf1e8; color: #50614f; }
@@ -106,6 +121,10 @@ textarea.input { resize: vertical; line-height: 1.6; }
     .input { font-size: 16px; }
     .product-link-row .input { flex-basis: 100%; }
     .product-link-row button { width: 100%; }
+    .lookup-status.is-loading { padding: 14px; gap: 12px; }
     .grid { grid-template-columns: minmax(0, 1fr); gap: 16px; }
     .item-image { height: 245px; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .lookup-dots > span { animation: none; opacity: .7; }
 }

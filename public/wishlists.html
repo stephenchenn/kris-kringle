@@ -56,7 +56,10 @@
                     <input id="f_url" class="input" type="url" aria-label="Product link" placeholder="https://your-favourite-shop.com/something-lovely" />
                     <button id="btn_product_lookup" class="btn-lite" type="button" disabled>Get details</button>
                 </div>
-                <p id="product_lookup_status" class="muted" role="status" aria-live="polite">Paste a product link to fill in the name, image and price.</p>
+                <div id="product_lookup_status" class="lookup-status" role="status" aria-live="polite" aria-atomic="true">
+                    <span id="product_lookup_dots" class="lookup-dots" aria-hidden="true" hidden><span></span><span></span><span></span></span>
+                    <div><strong id="product_lookup_title" class="lookup-title" hidden></strong><p id="product_lookup_message">Paste a product link to fill in the name, image and price.</p></div>
+                </div>
                 <img id="product_image_preview" alt="Product image preview" referrerpolicy="no-referrer" hidden />
                 <div class="input-row">
                     <div class="field full"><label class="field-label" for="f_title">Item name <span class="required">*</span></label><input id="f_title" class="input" aria-label="Item name" placeholder="What’s on your wishlist?" /></div>
@@ -309,7 +312,9 @@
             const recipients = Array.isArray(data.recipients_by_tier) ? data.recipients_by_tier : [];
             for (const tier of recipients) {
                 const line = document.createElement('div'); line.className = 'recipient-line';
-                const name = document.createElement('span'); name.className = 'recipient-name'; name.textContent = tier.recipient || '—';
+                const name = document.createElement('span'); name.className = 'recipient-name';
+                const emoji = document.createElement('span'); emoji.className = 'name-emoji'; emoji.textContent = '🎁'; emoji.setAttribute('aria-hidden', 'true');
+                name.append(emoji, document.createTextNode(tier.recipient || '—'));
                 const gift = document.createElement('span'); gift.className = 'recipient-tier';
                 gift.textContent = `${tier.name}${tier.budget_cents != null ? ` · ${fmtWholeDollars(tier.budget_cents)}` : ''}`;
                 line.append(name, gift); recipientsCard.append(line);
@@ -382,7 +387,15 @@
                 const header = document.createElement('div'); header.className = 'card-header';
                 const left = document.createElement('div'); left.className = 'left';
                 const nameEl = document.createElement('h3'); nameEl.className = 'owner'; nameEl.textContent = owner.name;
-                left.appendChild(nameEl);
+                const nameLine = document.createElement('div'); nameLine.className = 'owner-heading';
+                if (owner.id === meId || allowed.has(owner.id)) {
+                    const emoji = document.createElement('span'); emoji.className = 'name-emoji';
+                    emoji.textContent = owner.id === meId ? '🎅' : '🎁';
+                    emoji.setAttribute('aria-hidden', 'true');
+                    nameLine.appendChild(emoji);
+                }
+                nameLine.appendChild(nameEl);
+                left.appendChild(nameLine);
 
                 // Mark the people this participant is gifting to.
                 if (allowed.has(owner.id) && owner.id !== meId) {

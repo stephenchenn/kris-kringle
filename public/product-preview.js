@@ -2,6 +2,9 @@
   const urlInput = document.getElementById('f_url');
   const button = document.getElementById('btn_product_lookup');
   const status = document.getElementById('product_lookup_status');
+  const message = document.getElementById('product_lookup_message');
+  const heading = document.getElementById('product_lookup_title');
+  const dots = document.getElementById('product_lookup_dots');
   const preview = document.getElementById('product_image_preview');
   const token = new URLSearchParams(location.search).get('token');
   const fields = {
@@ -16,6 +19,17 @@
     try { return ['http:', 'https:'].includes(new URL(value).protocol); }
     catch { return false; }
   };
+
+  function setLoading(loading) {
+    status.classList.toggle('is-loading', loading);
+    heading.hidden = !loading;
+    heading.textContent = loading ? 'Finding product details' : '';
+    dots.hidden = !loading;
+    button.setAttribute('aria-busy', String(loading));
+    button.textContent = loading ? 'Finding details…' : 'Get details';
+    button.disabled = loading || !urlInput.value.trim();
+    if (loading) message.textContent = 'Hang tight — fetching the name, photo and price. This can take a few seconds.';
+  }
 
   function showImage() {
     preview.hidden = true;
@@ -42,8 +56,7 @@
     sequence++;
     controller?.abort();
     controller = null;
-    button.textContent = 'Get details';
-    button.disabled = !urlInput.value.trim();
+    setLoading(false);
   }
 
   async function lookup() {
@@ -51,7 +64,7 @@
     const url = urlInput.value.trim();
     if (!url) return;
     if (!validUrl(url)) {
-      status.textContent = 'Use a full product link starting with https://.';
+      message.textContent = 'Use a full product link starting with https://.';
       return;
     }
     stop();
@@ -62,9 +75,7 @@
     }]));
     const pending = new AbortController();
     controller = pending;
-    button.disabled = true;
-    button.textContent = 'Finding details…';
-    status.textContent = 'Finding the item’s name, image and price…';
+    setLoading(true);
     try {
       const response = await fetch('/api/wishlist/preview', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -85,19 +96,18 @@
         filled++;
       }
       showImage();
-      status.textContent = foreignPrice
+      message.textContent = foreignPrice
         ? `Item found. The shop’s price is ${product.currency} ${(product.price_cents / 100).toFixed(2)}; enter an AUD price below.`
         : filled ? 'Details filled. You can edit them before adding the item.' : 'Item found. Your edits have been kept.';
       if (product.price_cents === null && !fields.price_cents.value.trim()) {
-        status.textContent += ' A clear price wasn’t available; you can add it below.';
+        message.textContent += ' A clear price wasn’t available; you can add it below.';
       }
     } catch (error) {
-      if (requestId === sequence && error.name !== 'AbortError') status.textContent = error.message || 'Could not read this page. You can enter the details below.';
+      if (requestId === sequence && error.name !== 'AbortError') message.textContent = error.message || 'Could not read this page. You can enter the details below.';
     } finally {
       if (requestId === sequence) {
         controller = null;
-        button.textContent = 'Get details';
-        button.disabled = !urlInput.value.trim();
+        setLoading(false);
       }
     }
   }
@@ -111,8 +121,12 @@
       showImage();
       activeUrl = url;
     }
-    status.textContent = url ? 'Looking up this link will fill any empty details.' : initialMessage;
-    if (validUrl(url)) timer = setTimeout(lookup, 600);
+    message.textContent = url ? 'Looking up this link will fill any empty details.' : initialMessage;
+    if (validUrl(url)) {
+      // Show progress during the debounce too, before people start typing.
+      setLoading(true);
+      timer = setTimeout(lookup, 600);
+    }
   });
   button.addEventListener('click', lookup);
   window.wishlistProductPreview = {
@@ -120,7 +134,7 @@
       stop();
       autoValues.clear();
       activeUrl = '';
-      status.textContent = initialMessage;
+      message.textContent = initialMessage;
       preview.hidden = true;
       preview.removeAttribute('src');
       button.disabled = true;
