@@ -262,7 +262,8 @@ test('event status checks live draw progress without emails or file/database cha
   const file = path.join(server.directory, 'event-cli.json');
   const resultFile = path.join(server.directory, 'event-cli-result.json');
   write(resultFile, seeded.data);
-  // Status does not need a config file or admin secret: only saved invitations.
+  // Status reads participant tokens; the full assignments view needs the admin secret.
+  write(file, input);
   const beforeFiles = fs.readdirSync(server.directory).sort();
   const beforeResult = fs.readFileSync(resultFile, 'utf8');
   const db = new Database(path.join(server.directory, 'db.sqlite'), { readonly: true });
@@ -274,8 +275,9 @@ test('event status checks live draw progress without emails or file/database cha
   assert.match(waiting.stdout, /Drawn: 0\/4 \| Waiting: 4/);
   const waitingAssignments = await run('assignments', file, server.baseUrl);
   assert.equal(waitingAssignments.code, 0, waitingAssignments.stderr);
-  assert.match(waitingAssignments.stdout, /Alex.*Big gift.*\$100\.00.*Not drawn yet.*Waiting/);
-  assert.match(waitingAssignments.stdout, /Alex.*Small gift.*\$50\.00.*Not drawn yet.*Waiting/);
+  assert.match(waitingAssignments.stdout, /Alex.*Big gift.*\$100\.00.*(Blair|Casey|Drew).*Waiting/);
+  assert.match(waitingAssignments.stdout, /Alex.*Small gift.*\$50\.00.*(Blair|Casey|Drew).*Waiting/);
+  assert(!waitingAssignments.stdout.includes('Not drawn yet'));
   assert.deepEqual(db.prepare('SELECT * FROM participants ORDER BY id').all(), beforePeople);
   assert.deepEqual(db.prepare('SELECT * FROM assignments ORDER BY id').all(), beforeAssignments);
   assert.equal(server.emails().length, 0);
@@ -293,7 +295,7 @@ test('event status checks live draw progress without emails or file/database cha
     const budget = (tier.budget_cents / 100).toFixed(2).replace('.', '\\.');
     assert.match(assignments.stdout, new RegExp(`Alex.*${tier.name}.*\\$${budget}.*${tier.recipient}.*Drawn`));
   }
-  assert.match(assignments.stdout, /Blair.*Big gift.*\$100\.00.*Not drawn yet.*Waiting/);
+  assert.match(assignments.stdout, /Blair.*Big gift.*\$100\.00.*(Alex|Casey|Drew).*Waiting/);
   assert.equal(server.emails().length, 1, 'checking assignments does not send emails');
   assert(!assignments.stdout.includes(server.secret));
   for (const person of seeded.data.invites) assert(!assignments.stdout.includes(new URL(person.link).searchParams.get('token')));
@@ -304,11 +306,22 @@ test('event status checks live draw progress without emails or file/database cha
   assert.equal(db.prepare('SELECT SUM(has_drawn) n FROM participants').get().n, 1);
   assert.deepEqual(db.prepare('SELECT * FROM assignments ORDER BY id').all(), beforeAssignments);
 
+  write(file, { ...input, secret: 'wrong-secret' });
+  const unauthorized = await run('assignments', file, server.baseUrl);
+  assert.equal(unauthorized.code, 1);
+  assert.match(unauthorized.stderr, /Administrator authentication failed/);
+  assert(!unauthorized.stdout.includes('Recipient'));
+  assert(!unauthorized.stderr.includes('wrong-secret'));
+  write(file, input);
+
   await server.request('POST', '/api/admin/reset', { secret: server.secret });
   const missing = await run('status', file, server.baseUrl);
   assert.equal(missing.code, 1);
   assert.match(missing.stdout, /Drawn: 0\/4 \| Waiting: 0 \| Unavailable: 4/);
   assert.match(missing.stderr, /Invitation no longer exists/);
+  const missingAssignments = await run('assignments', file, server.baseUrl);
+  assert.equal(missingAssignments.code, 1);
+  assert.match(missingAssignments.stderr, /saved event no longer exists/);
 });
 
 test('status rejects invitations from another server before contacting it', async t => {

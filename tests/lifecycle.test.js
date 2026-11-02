@@ -65,6 +65,39 @@ test('event lifecycle, email links, wishlist privacy, reservations and persisten
     assert.equal(server.emails().length, 5);
   });
 
+  await t.test('admin can read all preassigned gifts without revealing draws, mutating data or sending emails', async () => {
+    const route = '/api/admin/assignments';
+    for (const secret of [undefined, 'wrong', people[0].token]) {
+      assert.equal((await server.request('POST', route, { secret, eventId })).status, 403);
+    }
+    assert.equal((await server.request('POST', route, { secret: server.secret })).status, 400);
+    assert.equal((await server.request('POST', route, { secret: server.secret, eventId: 'missing' })).status, 404);
+    const snapshot = new Database(path.join(server.directory, 'db.sqlite'), { readonly: true });
+    try {
+      const before = snapshot.prepare('SELECT * FROM assignments ORDER BY id').all();
+      const response = await admin('assignments');
+      assert.equal(response.status, 200);
+      assert.equal(response.headers.get('cache-control'), 'no-store');
+      assert.equal(response.data.event.id, eventId);
+      assert.equal(response.data.assignments.length, people.length * 2);
+      for (const row of response.data.assignments) {
+        assert(people.some(person => person.name === row.giver));
+        assert(people.some(person => person.name === row.recipient));
+        assert.notEqual(row.giver, row.recipient);
+        assert.equal(row.has_drawn, false);
+        assert.equal(row.budget_cents, row.tier === 'Gift 1' ? 10000 : 5000);
+      }
+      assert(!JSON.stringify(response.data).includes(people[0].token));
+      assert.deepEqual(snapshot.prepare('SELECT * FROM assignments ORDER BY id').all(), before);
+      for (const person of people) {
+        const me = await getMe(person);
+        assert.equal(me.data.me.has_drawn, false);
+        assert(me.data.recipients_by_tier.every(tier => tier.recipient === null));
+      }
+      assert.equal(server.emails().length, people.length);
+    } finally { snapshot.close(); }
+  });
+
   await t.test('every participant gives and receives each budget with no self or duplicate recipients', async () => {
     for (const person of people) {
       const result = await server.request('POST', '/api/draw', { token: person.token }, {

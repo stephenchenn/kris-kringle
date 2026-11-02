@@ -13,7 +13,7 @@ Commands:
   wishlists    Send wishlist reminder emails for the saved event
   links        Print the saved personal draw and wishlist links
   status       Check who has drawn and who is still waiting (read-only)
-  assignments  Show revealed recipients, gift tiers and budgets (read-only)
+  assignments  Show all saved recipients, tiers and budgets (admin, read-only)
 
 Options:
   --file PATH  Event JSON (default: .local/event-2026.json)
@@ -79,11 +79,11 @@ function fingerprint(value) {
   return createHash('sha256').update(JSON.stringify(normalized)).digest('hex');
 }
 
-async function showStatus(result, baseUrl, includeAssignments = false) {
+function savedPeople(result, baseUrl) {
   if (!result?.event?.id || !Array.isArray(result.invites) || !result.invites.length) {
     throw new Error('No saved event. Create the event first with npm run event:create.');
   }
-  const people = result.invites.map(person => {
+  return result.invites.map(person => {
     const link = new URL(person.link);
     const token = link.searchParams.get('token');
     if (link.origin !== baseUrl || link.pathname !== '/draw' || !token) {
@@ -91,6 +91,10 @@ async function showStatus(result, baseUrl, includeAssignments = false) {
     }
     return { ...person, token };
   });
+}
+
+async function showStatus(result, baseUrl) {
+  const people = savedPeople(result, baseUrl);
   const rows = await Promise.all(people.map(async person => {
     try {
       const response = await fetch(`${baseUrl}/api/me?token=${encodeURIComponent(person.token)}`, {
@@ -102,13 +106,7 @@ async function showStatus(result, baseUrl, includeAssignments = false) {
       if (data.event?.id !== result.event.id || typeof data.me?.has_drawn !== 'boolean') {
         throw new Error('Server returned incomplete status or a different event.');
       }
-      if (includeAssignments && (!Array.isArray(data.recipients_by_tier) || !data.recipients_by_tier.length ||
-          data.recipients_by_tier.some(tier => !tier.name || !Number.isSafeInteger(tier.budget_cents) ||
-            (data.me.has_drawn && !tier.recipient)))) {
-        throw new Error('Server returned incomplete gift assignments.');
-      }
-      return { Participant: data.me.name, Email: data.me.email, Status: data.me.has_drawn ? 'Drawn' : 'Waiting',
-        recipients: data.recipients_by_tier };
+      return { Participant: data.me.name, Email: data.me.email, Status: data.me.has_drawn ? 'Drawn' : 'Waiting' };
     } catch (error) {
       return { Participant: person.name, Email: person.email, Status: 'Unavailable',
         error: error.name === 'TimeoutError' ? 'Status check timed out.' : error.message };
@@ -118,22 +116,42 @@ async function showStatus(result, baseUrl, includeAssignments = false) {
   const waiting = rows.filter(row => row.Status === 'Waiting').length;
   const unavailable = rows.filter(row => row.Status === 'Unavailable');
   console.log(`Server: ${baseUrl}\nEvent: ${result.event.name} (${result.event.id})`);
-  if (includeAssignments) {
-    const money = new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD' });
-    console.table(rows.flatMap(row => row.Status === 'Unavailable'
-      ? [{ Giver: row.Participant, Tier: '—', Budget: '—', Recipient: 'Unavailable', Status: row.Status }]
-      : row.recipients.map(tier => ({ Giver: row.Participant, Tier: tier.name,
-        Budget: money.format(tier.budget_cents / 100),
-        Recipient: row.Status === 'Drawn' ? tier.recipient : 'Not drawn yet', Status: row.Status }))));
-  } else {
-    console.table(rows.map(({ Participant, Email, Status }) => ({ Participant, Email, Status })));
-  }
+  console.table(rows.map(({ Participant, Email, Status }) => ({ Participant, Email, Status })));
   console.log(`Drawn: ${drawn}/${people.length} | Waiting: ${waiting}${unavailable.length ? ` | Unavailable: ${unavailable.length}` : ''}`);
   console.log(`Checked live at ${new Date().toISOString()}`);
   if (unavailable.length) {
     for (const row of unavailable) console.error(`${row.Participant}: ${row.error}`);
     throw new Error('Some participant statuses could not be checked.');
   }
+}
+
+async function showAssignments(result, config, baseUrl) {
+  const people = savedPeople(result, baseUrl);
+  if (typeof config?.secret !== 'string' || !config.secret.trim()) {
+    throw new Error('The event JSON needs its admin secret to view all assignments.');
+  }
+  const response = await fetch(`${baseUrl}/api/admin/assignments`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ secret: config.secret, eventId: result.event.id }),
+    redirect: 'error', signal: AbortSignal.timeout(30000),
+  });
+  if (response.status === 403) throw new Error('Administrator authentication failed. Check the admin secret in the event JSON.');
+  if (response.status === 404) throw new Error('The saved event no longer exists on this server.');
+  if (!response.ok) throw new Error(`Assignment check returned HTTP ${response.status}.`);
+  const data = await response.json();
+  if (data.event?.id !== result.event.id || !Array.isArray(data.assignments) || !data.assignments.length ||
+      data.assignments.some(row => !row.giver_id || !row.giver || !row.recipient || !row.tier ||
+        !Number.isSafeInteger(row.budget_cents) || typeof row.has_drawn !== 'boolean')) {
+    throw new Error('Server returned incomplete gift assignments or a different event.');
+  }
+  const money = new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD' });
+  console.log(`Server: ${baseUrl}\nEvent: ${data.event.name} (${data.event.id})`);
+  console.table(data.assignments.map(row => ({ Giver: row.giver, Tier: row.tier,
+    Budget: money.format(row.budget_cents / 100), Recipient: row.recipient,
+    Status: row.has_drawn ? 'Drawn' : 'Waiting' })));
+  const drawn = new Set(data.assignments.filter(row => row.has_drawn).map(row => row.giver_id)).size;
+  console.log(`Drawn: ${drawn}/${people.length} | Waiting: ${people.length - drawn}`);
+  console.log(`Checked live at ${new Date().toISOString()}`);
 }
 
 async function main() {
@@ -158,8 +176,12 @@ async function main() {
   const stateFile = path.join(directory, `${stem}-state.json`);
   const sendFile = path.join(directory, stem.startsWith('event-') ? `send-${stem.slice(6)}.json` : `${stem}-send.json`);
   const lockFile = path.join(directory, `${stem}.lock`);
-  if (command === 'status' || command === 'assignments') {
-    await showStatus(readJson(resultFile, true), baseUrl, command === 'assignments');
+  if (command === 'status') {
+    await showStatus(readJson(resultFile, true), baseUrl);
+    return;
+  }
+  if (command === 'assignments') {
+    await showAssignments(readJson(resultFile, true), readJson(filename), baseUrl);
     return;
   }
   const config = readJson(filename);

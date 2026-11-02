@@ -330,9 +330,11 @@ To see who each participant is giving to, with their gift tiers and budgets:
 npm run event:assignments
 ```
 
-This prints one row per giver and tier. Recipients are shown for completed draws;
-people who haven't drawn show **Not drawn yet**. Checking the table does not
-perform any draws or send emails. It uses the same saved event and accepts
+This uses the admin secret in the event JSON to show the complete saved
+allocation, including participants who haven't drawn. It prints one row per giver
+and tier, with the recipient, budget and **Drawn** or **Waiting** status. Checking
+the table does not perform draws or send emails. Participant pages still hide
+recipients until that participant draws. It uses the same saved event and accepts
 `--file` and `--url`, just like `event:status`.
 
 Participants open their invitation, draw, then use the wishlist button. Test

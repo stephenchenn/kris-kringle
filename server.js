@@ -388,6 +388,29 @@ app.post("/api/draw", async (req, res) => {
 
 
 
+// Read the complete saved allocation without revealing it to participant tokens
+// or changing anyone's draw status.
+app.post('/api/admin/assignments', (req, res) => {
+  const { secret, eventId } = req.body || {};
+  if (secret !== process.env.ADMIN_SECRET) return res.status(403).json({ error: 'Forbidden' });
+  if (typeof eventId !== 'string' || !eventId.trim()) {
+    return res.status(400).json({ error: 'Provide an eventId' });
+  }
+  const event = db.prepare('SELECT id, name FROM events WHERE id = ?').get(eventId);
+  if (!event) return res.status(404).json({ error: 'No event found' });
+  const assignments = db.prepare(`
+    SELECT g.id AS giver_id, g.name AS giver, g.has_drawn,
+           r.name AS recipient, t.name AS tier, t.budget_cents
+    FROM assignments a
+    JOIN participants g ON g.id = a.giver_id
+    JOIN participants r ON r.id = a.recipient_id
+    JOIN gift_tiers t ON t.id = a.tier_id
+    WHERE a.event_id = ?
+    ORDER BY g.name COLLATE NOCASE, t.sort_order
+  `).all(eventId).map(row => ({ ...row, has_drawn: Boolean(row.has_drawn) }));
+  res.json({ event, assignments });
+});
+
 // --- API: admin seed ---
 // server.js (replace your /api/admin/seed endpoint)
 
