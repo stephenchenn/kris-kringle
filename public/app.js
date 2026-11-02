@@ -1,176 +1,126 @@
-// public/app.js
-// Client-side JS for the Draw page (supports multi-tier/budget gifts).
-// Expects backend /api/me and /api/draw to return recipients grouped by tier.
-// Also uses window.triggerConfetti(themeIndex, durationMs) if available.
-
+// Personal draw page. Assignments stay hidden until the server confirms a draw.
 (function () {
-  // Helpers to get token from querystring
-  const params = new URLSearchParams(location.search);
-  const token = params.get("token");
+  const token = new URLSearchParams(location.search).get('token');
+  const el = id => document.getElementById(id);
+  const drawBtn = el('drawBtn');
+  const resendBtn = el('resendBtn');
+  const wishlistBtn = el('wishlistBtn');
+  const money = new Intl.NumberFormat('en-AU', {
+    style: 'currency', currency: 'AUD', minimumFractionDigits: 0, maximumFractionDigits: 2,
+  });
 
-  // DOM refs
-  const titleEl = document.getElementById("title");
-  const helloEl = document.getElementById("hello");
-  const eventNameEl = document.getElementById("eventName");
-  const gppEl = document.getElementById("gpp");
-  const recipientsEl = document.getElementById("recipients");
-  const noneEl = document.getElementById("none");
-  const drawBtn = document.getElementById("drawBtn");
-  const errorEl = document.getElementById("error");
-  const noteEl = document.getElementById("note");
-  const resendBtn = document.getElementById("resendBtn"); // may be null if not added
-  const wishlistBtn = document.getElementById("wishlistBtn");
-
-  if (!token) {
-    if (errorEl) errorEl.textContent = "Invalid or missing invite link.";
-    if (drawBtn) drawBtn.disabled = true;
-    throw new Error("Missing token");
+  function showError(message) {
+    el('error').textContent = message;
+    el('loading').hidden = true;
   }
 
-  // Render recipients grouped by tier (ordered list)
   function renderByTier(list) {
-    recipientsEl.innerHTML = "";
-    if (!Array.isArray(list) || list.length === 0) {
-      noneEl.style.display = "block";
-      return;
-    }
-    noneEl.style.display = "none";
-
-    // create list items: "Gift 1 ($100): Alice"
-    for (const t of list) {
-      const li = document.createElement("li");
-      const dollars = (t.budget_cents / 100).toFixed(0);
-      const recipientText = t.recipient ? t.recipient : "—";
-      li.textContent = `${t.name} ($${dollars}): ${recipientText}`;
-      recipientsEl.appendChild(li);
+    el('recipients').replaceChildren();
+    el('none').hidden = list.length > 0;
+    for (const tier of list) {
+      const tile = document.createElement('li');
+      tile.className = `gift-tile${tier.recipient ? '' : ' unrevealed'}`;
+      const label = document.createElement('div');
+      label.className = 'gift-label';
+      const name = document.createElement('span');
+      name.className = 'gift-tier';
+      name.textContent = tier.name;
+      const budget = document.createElement('span');
+      budget.className = 'gift-budget';
+      budget.textContent = money.format(tier.budget_cents / 100);
+      const recipient = document.createElement('strong');
+      recipient.className = 'gift-recipient';
+      recipient.textContent = tier.recipient || 'A little mystery…';
+      const hint = document.createElement('span');
+      hint.className = 'gift-hint';
+      hint.textContent = tier.recipient ? 'A thoughtful gift, chosen by you.' : 'Draw to reveal your recipient.';
+      label.append(name, budget);
+      tile.append(label, recipient, hint);
+      el('recipients').append(tile);
     }
   }
 
-  // Load /api/me
   async function loadMe() {
-    errorEl.textContent = "";
+    el('error').textContent = '';
     try {
-      const res = await fetch(`/api/me?token=${encodeURIComponent(token)}`, { cache: "no-store" });
+      const res = await fetch(`/api/me?token=${encodeURIComponent(token)}`, { cache: 'no-store' });
       const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || "Failed to load user data");
-      }
-
-      // Update UI
-      titleEl.textContent = `${data.event.name} — Draw`;
-      helloEl.textContent = `Hello, ${data.me.name} (${data.me.email})`;
-      eventNameEl.textContent = data.event.name;
-      // Show number of tiers instead of "gifts per person"
-      gppEl.textContent = (Array.isArray(data.event.tiers) ? data.event.tiers.length : 0);
-
-      renderByTier(data.recipients_by_tier);
-
-      const haveAll = (Array.isArray(data.recipients_by_tier) && data.recipients_by_tier.every(t => !!t.recipient));
-      const canDraw = !data.me.has_drawn || !haveAll;
-      drawBtn.disabled = !canDraw;
-
-      // After computing `haveAll` and `canDraw`
-      const wlUrl = `/wishlists?token=${encodeURIComponent(token)}`;
-      if (wishlistBtn) {
-        const hasAnyRecipient = Array.isArray(data.recipients_by_tier) && data.recipients_by_tier.some(t => !!t.recipient);
-        if (data.me.has_drawn && hasAnyRecipient) {
-          wishlistBtn.style.display = "";   // show
-          wishlistBtn.disabled = false;
-          wishlistBtn.onclick = () => { location.href = wlUrl; };
-        } else {
-          wishlistBtn.style.display = "none"; // hide until drawn
-          wishlistBtn.onclick = null;
-        }
-      }
-
-      if (!canDraw) {
-        noteEl.textContent = "You’re all set! Your recipients are saved. Use “Resend my email” if you need an email copy.";
-      } else {
-        noteEl.textContent = "";
-      }
-
-      // If present, toggle resend button availability
-      if (resendBtn) {
-        resendBtn.disabled = !(Array.isArray(data.recipients_by_tier) && data.recipients_by_tier.some(t => !!t.recipient));
-      }
-
+      if (!res.ok) throw new Error(data.error || 'Could not open your invitation. Please try again.');
+      const list = data.recipients_by_tier || [];
+      const complete = data.me.has_drawn && list.length > 0 && list.every(tier => !!tier.recipient);
+      document.title = `${data.event.name} — Draw`;
+      el('title').textContent = complete ? 'The secret’s yours to keep.' : 'A little Christmas mystery.';
+      el('intro').textContent = complete
+        ? 'Your recipients are revealed. Take a peek at their wishlists for a few good hints, then leave some of your own.'
+        : 'Find out who you’re gifting to, gather a few hints, and make their day. Your part in the surprise starts here.';
+      el('hello').textContent = `Hello, ${data.me.name}.`;
+      el('eventName').textContent = data.event.name;
+      el('gpp').textContent = data.event.tiers.length;
+      el('recipients-title').textContent = complete ? 'Your recipients' : 'Who will you surprise?';
+      el('draw-state').textContent = complete ? 'Draw saved' : 'Ready when you are';
+      renderByTier(list);
+      drawBtn.disabled = complete;
+      drawBtn.hidden = complete;
+      drawBtn.textContent = 'Draw now';
+      wishlistBtn.hidden = !complete;
+      resendBtn.hidden = !complete;
+      resendBtn.disabled = !complete;
+      el('status').hidden = false;
+      el('loading').hidden = true;
+      el('note').textContent = complete
+        ? 'Your recipients are saved. We’ll also email you a copy with your wishlist link.'
+        : 'One gift of each budget, with a different recipient for each whenever possible. Ready to find out?';
       return data;
-    } catch (err) {
-      errorEl.textContent = String(err.message || err);
+    } catch (error) {
+      showError(error.message || 'Could not open your invitation. Please try again.');
       drawBtn.disabled = true;
-      if (resendBtn) resendBtn.disabled = true;
+      resendBtn.disabled = true;
       return null;
     }
   }
 
-  // Draw action: reveals preassigned recipients and triggers email on server
-  async function draw() {
+  drawBtn.addEventListener('click', async () => {
     drawBtn.disabled = true;
-    errorEl.textContent = "";
-    const origText = drawBtn.textContent;
-    drawBtn.textContent = "Drawing…";
+    drawBtn.textContent = 'Drawing…';
+    el('error').textContent = '';
     try {
-      const resp = await fetch("/api/draw", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token }),
+      const response = await fetch('/api/draw', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token }),
       });
-      const data = await resp.json();
-      if (!resp.ok) {
-        throw new Error(data.error || "Draw failed");
-      }
-
-      // Fire confetti for 5s unless user prefers reduced motion
-      try {
-        const prefersReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-        if (!prefersReducedMotion && window.triggerConfetti) {
-          window.triggerConfetti(0, 5000);
-        }
-      } catch (e) {
-        // ignore confetti errors
-        // console.warn("Confetti error", e);
-      }
-
-      // refresh UI to show recipients
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Draw failed. Please try again.');
       await loadMe();
-    } catch (err) {
-      errorEl.textContent = String(err.message || err);
-      // keep button enabled so user can retry if recoverable
+      if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches && window.triggerConfetti) {
+        window.triggerConfetti(0, 5000);
+      }
+    } catch (error) {
+      showError(error.message || 'Draw failed. Please try again.');
       drawBtn.disabled = false;
     } finally {
-      drawBtn.textContent = origText;
+      drawBtn.textContent = 'Draw now';
     }
-  }
+  });
 
-  // Optional: resend assignment email if server supports /api/resend
-  async function resendEmail() {
-    if (!resendBtn) return;
+  wishlistBtn.addEventListener('click', () => { location.href = `/wishlists?token=${encodeURIComponent(token)}`; });
+  resendBtn.addEventListener('click', async () => {
     resendBtn.disabled = true;
-    errorEl.textContent = "";
-    const orig = resendBtn.textContent;
-    resendBtn.textContent = "Sending…";
+    resendBtn.textContent = 'Sending…';
+    el('error').textContent = '';
     try {
-      const res = await fetch("/api/resend", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token }),
+      const response = await fetch('/api/resend', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token }),
       });
-      const j = await res.json();
-      if (!res.ok) throw new Error(j.error || "Resend failed");
-      noteEl.textContent = "Email re-sent. Check your inbox.";
-    } catch (err) {
-      errorEl.textContent = String(err.message || err);
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Could not resend your email.');
+      el('note').textContent = 'Email re-sent. Check your inbox.';
+    } catch (error) {
+      showError(error.message || 'Could not resend your email.');
     } finally {
-      resendBtn.textContent = orig;
-      // allow resend again
+      resendBtn.textContent = 'Resend my email';
       resendBtn.disabled = false;
     }
-  }
+  });
 
-  // Wire up events
-  drawBtn.addEventListener("click", draw);
-  if (resendBtn) resendBtn.addEventListener("click", resendEmail);
-
-  // initial load
-  loadMe();
+  if (token) loadMe();
+  else showError('This invitation link is missing. Open the personal link in your invitation email, or ask the organiser to resend it.');
 })();
