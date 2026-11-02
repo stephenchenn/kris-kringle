@@ -6,7 +6,8 @@
   const resendBtn = el('resendBtn');
   const wishlistBtn = el('wishlistBtn');
   const money = new Intl.NumberFormat('en-AU', {
-    style: 'currency', currency: 'AUD', minimumFractionDigits: 0, maximumFractionDigits: 2,
+    style: 'currency', currency: 'AUD', minimumFractionDigits: 2, maximumFractionDigits: 2,
+    trailingZeroDisplay: 'stripIfInteger',
   });
 
   function showError(message) {

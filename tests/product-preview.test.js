@@ -198,6 +198,9 @@ test('preview API requires a completed draw and rejects private targets without 
   assert.equal((await server.request('POST', '/api/wishlist/preview', body)).status, 403);
   await server.request('POST', '/api/draw', { token: person.token });
   assert.equal((await server.request('POST', `/api/wishlist/preview?token=${person.token}`, { ...body, token: 'invalid' })).status, 400);
+  // Matching tokens reach the preview route; conflicting tokens do not count
+  // towards that participant's product lookup limit.
+  assert.equal((await server.request('POST', `/api/wishlist/preview?token=${person.token}`, body)).status, 400);
   for (let i = 0; i < 19; i++) assert.equal((await server.request('POST', '/api/wishlist/preview', body)).status, 400);
   assert.equal((await server.request('POST', '/api/wishlist/preview', body)).status, 429);
   assert.equal((await server.request('GET', `/api/wishlist/me?token=${person.token}`)).data.items.length, 0);

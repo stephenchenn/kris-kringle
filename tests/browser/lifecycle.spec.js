@@ -1,12 +1,16 @@
 const { test, expect } = require('@playwright/test');
 const { startServer } = require('../support/server');
 
-test('email invitation → draw → wishlist → private reservations → edit and delete', async ({ browser }, testInfo) => {
+test('12 participants: invitation → draw → wishlist → private reservations → edit and delete', async ({ browser }, testInfo) => {
   const server = await startServer();
   const contexts = [];
   const errors = [];
   try {
-    const seeded = await server.seed();
+    const seeded = await server.seed({
+      participants: ['Alex', 'Blair', 'Casey', 'Drew', 'Eden', 'Finley', 'Georgia', 'Harper', 'Isla', 'Jamie', 'Kai', 'Logan']
+        .map(name => ({ name: `Test ${name}`, email: `test+${name.toLowerCase()}@example.test` })),
+      tiers: [{ name: 'BIG GIFT', budgetCents: 5000 }, { name: 'small gift', budgetCents: 2000 }],
+    });
     await server.request('POST', '/api/admin/send-invites', { secret: server.secret, eventId: seeded.event.id });
     const people = seeded.people;
     for (const person of people) {

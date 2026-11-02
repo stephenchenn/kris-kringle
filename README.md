@@ -33,6 +33,15 @@ npm run test:e2e
 npm run demo
 ```
 
+The automated tests use temporary databases and capture emails without sending
+them. Desktop and mobile browser tests draw all 12 participants, then check
+wishlist editing and reservations from the owner, two givers and an unrelated
+participant. API tests check all 144 owner/viewer combinations, competing
+reservations, restart persistence and larger events with up to 30 participants.
+When tiers exceed the number of other participants, repeat recipients are
+unavoidable; tests check that everyone is used before any repeat and that repeats
+are balanced.
+
 The demo prints five participant links and captures emails locally. It uses its
 own database under `.local/` and leaves last year's database untouched.
 

@@ -743,6 +743,10 @@ app.post("/api/resend", async (req, res) => {
 
 // All wishlist actions require a completed draw, including direct API access.
 app.use(['/api/wishlist', '/api/wishlists'], (req, res, next) => {
+  // The draw gate and the route must authenticate the same participant.
+  if (req.query.token && req.body?.token && req.query.token !== req.body.token) {
+    return res.status(400).json({ error: 'Conflicting invitation tokens' });
+  }
   const me = requireMeByToken(req.query.token || req.body?.token);
   if (!me) return res.status(401).json({ error: 'invalid token' });
   if (!me.has_drawn) return res.status(403).json({ error: 'Draw your recipients before opening wishlists.' });
