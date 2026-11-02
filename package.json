@@ -11,6 +11,7 @@
     "event:wishlists": "node scripts/event.js wishlists",
     "event:links": "node scripts/event.js links",
     "event:status": "node scripts/event.js status",
+    "event:assignments": "node scripts/event.js assignments",
     "email:connect": "python3 scripts/email-delivery.py connect",
     "email:check": "python3 scripts/email-delivery.py check",
     "start": "node server.js",

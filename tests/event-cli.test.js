@@ -272,6 +272,10 @@ test('event status checks live draw progress without emails or file/database cha
   const waiting = await run('status', file, server.baseUrl);
   assert.equal(waiting.code, 0, waiting.stderr);
   assert.match(waiting.stdout, /Drawn: 0\/4 \| Waiting: 4/);
+  const waitingAssignments = await run('assignments', file, server.baseUrl);
+  assert.equal(waitingAssignments.code, 0, waitingAssignments.stderr);
+  assert.match(waitingAssignments.stdout, /Alex.*Big gift.*\$100\.00.*Not drawn yet.*Waiting/);
+  assert.match(waitingAssignments.stdout, /Alex.*Small gift.*\$50\.00.*Not drawn yet.*Waiting/);
   assert.deepEqual(db.prepare('SELECT * FROM participants ORDER BY id').all(), beforePeople);
   assert.deepEqual(db.prepare('SELECT * FROM assignments ORDER BY id').all(), beforeAssignments);
   assert.equal(server.emails().length, 0);
@@ -282,6 +286,17 @@ test('event status checks live draw progress without emails or file/database cha
   assert.match(mixed.stdout, /Alex.*Drawn/);
   assert.match(mixed.stdout, /Blair.*Waiting/);
   assert.match(mixed.stdout, /Drawn: 1\/4 \| Waiting: 3/);
+  const assignments = await run('assignments', file, server.baseUrl);
+  assert.equal(assignments.code, 0, assignments.stderr);
+  const me = await server.request('GET', `/api/me?token=${token}`);
+  for (const tier of me.data.recipients_by_tier) {
+    const budget = (tier.budget_cents / 100).toFixed(2).replace('.', '\\.');
+    assert.match(assignments.stdout, new RegExp(`Alex.*${tier.name}.*\\$${budget}.*${tier.recipient}.*Drawn`));
+  }
+  assert.match(assignments.stdout, /Blair.*Big gift.*\$100\.00.*Not drawn yet.*Waiting/);
+  assert.equal(server.emails().length, 1, 'checking assignments does not send emails');
+  assert(!assignments.stdout.includes(server.secret));
+  for (const person of seeded.data.invites) assert(!assignments.stdout.includes(new URL(person.link).searchParams.get('token')));
   for (const person of seeded.data.invites) assert(!mixed.stdout.includes(new URL(person.link).searchParams.get('token')));
   assert(!mixed.stdout.includes(server.secret));
   assert.equal(fs.readFileSync(resultFile, 'utf8'), beforeResult);

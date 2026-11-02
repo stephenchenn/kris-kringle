@@ -324,6 +324,17 @@ emails. Failed checks are shown as **Unavailable**, rather than being counted as
 waiting. It uses the saved result even if you have started editing the event JSON
 for another event. The command also accepts the same `--file` and `--url` options.
 
+To see who each participant is giving to, with their gift tiers and budgets:
+
+```sh
+npm run event:assignments
+```
+
+This prints one row per giver and tier. Recipients are shown for completed draws;
+people who haven't drawn show **Not drawn yet**. Checking the table does not
+perform any draws or send emails. It uses the same saved event and accepts
+`--file` and `--url`, just like `event:status`.
+
 Participants open their invitation, draw, then use the wishlist button. Test
 wishlist add/edit/delete and private reservations using the checklist in the
 local demo section above. To email everyone their wishlist links:

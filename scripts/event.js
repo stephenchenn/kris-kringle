@@ -13,6 +13,7 @@ Commands:
   wishlists    Send wishlist reminder emails for the saved event
   links        Print the saved personal draw and wishlist links
   status       Check who has drawn and who is still waiting (read-only)
+  assignments  Show revealed recipients, gift tiers and budgets (read-only)
 
 Options:
   --file PATH  Event JSON (default: .local/event-2026.json)
@@ -78,7 +79,7 @@ function fingerprint(value) {
   return createHash('sha256').update(JSON.stringify(normalized)).digest('hex');
 }
 
-async function showStatus(result, baseUrl) {
+async function showStatus(result, baseUrl, includeAssignments = false) {
   if (!result?.event?.id || !Array.isArray(result.invites) || !result.invites.length) {
     throw new Error('No saved event. Create the event first with npm run event:create.');
   }
@@ -101,7 +102,13 @@ async function showStatus(result, baseUrl) {
       if (data.event?.id !== result.event.id || typeof data.me?.has_drawn !== 'boolean') {
         throw new Error('Server returned incomplete status or a different event.');
       }
-      return { Participant: data.me.name, Email: data.me.email, Status: data.me.has_drawn ? 'Drawn' : 'Waiting' };
+      if (includeAssignments && (!Array.isArray(data.recipients_by_tier) || !data.recipients_by_tier.length ||
+          data.recipients_by_tier.some(tier => !tier.name || !Number.isSafeInteger(tier.budget_cents) ||
+            (data.me.has_drawn && !tier.recipient)))) {
+        throw new Error('Server returned incomplete gift assignments.');
+      }
+      return { Participant: data.me.name, Email: data.me.email, Status: data.me.has_drawn ? 'Drawn' : 'Waiting',
+        recipients: data.recipients_by_tier };
     } catch (error) {
       return { Participant: person.name, Email: person.email, Status: 'Unavailable',
         error: error.name === 'TimeoutError' ? 'Status check timed out.' : error.message };
@@ -111,7 +118,16 @@ async function showStatus(result, baseUrl) {
   const waiting = rows.filter(row => row.Status === 'Waiting').length;
   const unavailable = rows.filter(row => row.Status === 'Unavailable');
   console.log(`Server: ${baseUrl}\nEvent: ${result.event.name} (${result.event.id})`);
-  console.table(rows.map(({ Participant, Email, Status }) => ({ Participant, Email, Status })));
+  if (includeAssignments) {
+    const money = new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD' });
+    console.table(rows.flatMap(row => row.Status === 'Unavailable'
+      ? [{ Giver: row.Participant, Tier: '—', Budget: '—', Recipient: 'Unavailable', Status: row.Status }]
+      : row.recipients.map(tier => ({ Giver: row.Participant, Tier: tier.name,
+        Budget: money.format(tier.budget_cents / 100),
+        Recipient: row.Status === 'Drawn' ? tier.recipient : 'Not drawn yet', Status: row.Status }))));
+  } else {
+    console.table(rows.map(({ Participant, Email, Status }) => ({ Participant, Email, Status })));
+  }
   console.log(`Drawn: ${drawn}/${people.length} | Waiting: ${waiting}${unavailable.length ? ` | Unavailable: ${unavailable.length}` : ''}`);
   console.log(`Checked live at ${new Date().toISOString()}`);
   if (unavailable.length) {
@@ -128,7 +144,7 @@ async function main() {
   }, allowPositionals: true });
   if (values.help) { console.log(HELP); return; }
   const command = positionals[0];
-  if (positionals.length !== 1 || !['create', 'invite', 'wishlists', 'links', 'status'].includes(command)) throw new Error(HELP);
+  if (positionals.length !== 1 || !['create', 'invite', 'wishlists', 'links', 'status', 'assignments'].includes(command)) throw new Error(HELP);
   if ((values.new || values['no-email']) && command !== 'create') throw new Error('--new and --no-email apply to event:create only.');
   const server = new URL(values.url);
   if (!['http:', 'https:'].includes(server.protocol) || server.username || server.password ||
@@ -142,8 +158,8 @@ async function main() {
   const stateFile = path.join(directory, `${stem}-state.json`);
   const sendFile = path.join(directory, stem.startsWith('event-') ? `send-${stem.slice(6)}.json` : `${stem}-send.json`);
   const lockFile = path.join(directory, `${stem}.lock`);
-  if (command === 'status') {
-    await showStatus(readJson(resultFile, true), baseUrl);
+  if (command === 'status' || command === 'assignments') {
+    await showStatus(readJson(resultFile, true), baseUrl, command === 'assignments');
     return;
   }
   const config = readJson(filename);
