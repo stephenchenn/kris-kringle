@@ -205,3 +205,31 @@ test('preview API requires a completed draw and rejects private targets without 
   assert.equal((await server.request('POST', '/api/wishlist/preview', body)).status, 429);
   assert.equal((await server.request('GET', `/api/wishlist/me?token=${person.token}`)).data.items.length, 0);
 });
+
+test('Amazon main-product title, hi-res image and buy-box price work without social metadata',()=>{
+ const url='https://www.amazon.com/ENGINEDIY-Stirling-Engine-Completely-All-Metal/dp/B0DS637S6S/';
+ const html=`<title>Amazon.com: Engine : Health &amp; Household</title>
+ <span id="productTitle">Stirling Engine Model Kits that Works</span>
+ <img id="landingImage" src="https://m.media-amazon.com/images/I/small.jpg" data-old-hires="https://m.media-amazon.com/images/I/engine.jpg">
+ <div id="corePriceDisplay_desktop_feature_div"><span class="a-price a-text-price"><span class="a-offscreen">$99.99</span></span>
+ <span class="a-price"><span class="a-offscreen">$49.95</span><span aria-hidden="true"><span>$</span>49<span>.95</span></span></span></div>
+ <div class="a-carousel"><span class="a-price"><span class="a-offscreen">$5.00</span></span></div>`;
+ assert.deepEqual(extractProduct(html,url),{title:'Stirling Engine Model Kits that Works',image_url:'https://m.media-amazon.com/images/I/engine.jpg',price_cents:4995,currency:'USD'});
+ const taiwan=html.replace(/\$49.95/g,'TWD 1,599.95');
+ assert.equal(extractProduct(taiwan,url).currency,'TWD');assert.equal(extractProduct(taiwan,url).price_cents,159995);
+ const au=html.replace(/\$49.95/g,'A$49.95');
+ assert.equal(extractProduct(au,url.replace('amazon.com/','amazon.com.au/')).currency,'AUD');
+});
+
+test('Amazon unavailable offers never borrow a recommendation price; dynamic images are validated',()=>{
+ const url='https://www.amazon.com/dp/B0DS637S6S?th=1';
+ const html=`<title>Amazon item</title><span id="productTitle">Stirling Engine</span>
+ <img id="landingImage" src="javascript:alert(1)" data-old-hires="http://127.0.0.1/internal" data-a-dynamic-image='{ "https://m.media-amazon.com/small.jpg":[100,100],"https://m.media-amazon.com/large.jpg":[800,800] }'>
+ <div id="apex_desktop"><div class="a-carousel"><span class="a-price"><span class="a-offscreen">$5.00</span></span></div></div>
+ <div id="buybox">See all buying options</div><div class="a-price"><span class="a-offscreen">$20.00</span></div>`;
+ const result=extractProduct(html,url);assert.equal(result.price_cents,null);assert.equal(result.image_url,'https://m.media-amazon.com/large.jpg');
+ const ambiguous=html+'<div id="corePrice_feature_div"><span class="a-price"><span class="a-offscreen">$25</span></span><span class="a-price"><span class="a-offscreen">$40</span></span></div>';
+ assert.equal(extractProduct(ambiguous,url).price_cents,null);
+ assert.equal(extractProduct(html,url.replace('amazon.com','amazon.com.evil.test')).image_url,null);
+ assert.throws(()=>extractProduct('<title>Robot Check</title><span id="productTitle">Wrong title</span>',url),/blocks automatic lookups/);
+});

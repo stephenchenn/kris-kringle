@@ -779,6 +779,10 @@ app.use(['/api/wishlist', '/api/wishlists'], (req, res, next) => {
 });
 
 const ownerItemColumns = 'id, wishlist_id, title, url, notes, price_cents, image_url, created_at, updated_at';
+// This family app uses invitation tokens as participant authentication. Resolve
+// edit access from the stored email, never a name or a flag supplied by a client.
+const wishlistAdminEmail = (process.env.WISHLIST_ADMIN_EMAIL ?? 'chen.stephen151@gmail.com').trim().toLowerCase();
+const isWishlistAdmin = me => !!wishlistAdminEmail && me.email.trim().toLowerCase() === wishlistAdminEmail;
 const giftFeatures = installGiftFeatures({ app, db, transporter, fromEmail, requireMeByToken,
   publicBaseUrl, escapeHtml, now: process.env.NODE_ENV === 'test' && process.env.EVENT_TEST_NOW
     ? () => Date.parse(process.env.EVENT_TEST_NOW) : Date.now });
@@ -851,7 +855,7 @@ app.post('/api/wishlist/item', (req, res) => {
   res.json({ ok: true, item: row });
 });
 
-// --- Wishlist: update item (owner only) ---
+// --- Wishlist: update item (owner or designated wishlist admin, same event) ---
 app.put('/api/wishlist/item/:id', (req, res) => {
   const id = req.params.id;
   const { token, title, url, notes, price_cents, image_url } = req.body || {};
@@ -861,13 +865,15 @@ app.put('/api/wishlist/item/:id', (req, res) => {
   if (!title || !String(title).trim()) return res.status(400).json({ error: 'title required' });
 
   const row = db.prepare(`
-    SELECT wi.id, wl.owner_id
+    SELECT wi.id, wl.owner_id, wl.event_id
     FROM wishlist_items wi
     JOIN wishlists wl ON wl.id = wi.wishlist_id
     WHERE wi.id = ?
   `).get(id);
   if (!row) return res.status(404).json({ error: 'not found' });
-  if (row.owner_id !== me.pid) return res.status(403).json({ error: 'forbidden' });
+  if (row.event_id !== me.event_id || (row.owner_id !== me.pid && !isWishlistAdmin(me))) {
+    return res.status(403).json({ error: 'forbidden' });
+  }
 
   db.prepare(`
   UPDATE wishlist_items SET
@@ -1061,6 +1067,7 @@ app.get('/api/wishlists/all', (req, res) => {
     me: {
       id: me.pid,
       name: me.pname,
+      is_wishlist_admin: isWishlistAdmin(me),
       has_drawn: !!meExtra.has_drawn,
       invite_token: meExtra.invite_token
     },

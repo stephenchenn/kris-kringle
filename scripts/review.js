@@ -6,7 +6,7 @@ const {randomUUID}=require('node:crypto');
 const directory=fs.mkdtempSync(path.join(os.tmpdir(),'kris-kringle-review-'));
 const port=Number(process.env.REVIEW_PORT || 3001);
 Object.assign(process.env,{NODE_ENV:'development',DB_PATH:path.join(directory,'db.sqlite'),
- EMAIL_MODE:'preview',EMAIL_PREVIEW_DIR:path.join(directory,'emails'),
+ WISHLIST_ADMIN_EMAIL:'alex@example.test',EMAIL_MODE:'preview',EMAIL_PREVIEW_DIR:path.join(directory,'emails'),
  FROM_EMAIL:'Family Kris Kringle Preview <preview@example.test>',ADMIN_SECRET:randomUUID(),
  PORT:String(port),BASE_URL:`http://127.0.0.1:${port}`});
 const {app,db,transporter,giftFeatures}=require('../server');
@@ -18,8 +18,8 @@ function shell(title,body){return `<!doctype html><html lang="en-AU"><meta chars
 app.get('/review',(_req,res)=>res.send(shell('Kris Kringle feature review',`
  <span class="review-tag">LOCAL PREVIEW · Emails are captured here</span>
  <h1>A little more Christmas magic.</h1>
- <p>Try the notification bells, send a wishlist nudge, and inspect the captured emails. Each person’s button opens their own session. The three events below demonstrate each guessing phase.</p>
- ${scenarios.map(s=>`<section class="review-card"><h2>${escape(s.label)}</h2><p>${escape(s.description)}</p><div class="people">${s.people.map(p=>`<a href="/wishlists?token=${encodeURIComponent(p.token)}" target="_blank" rel="noopener">Open as ${escape(p.name)}</a>`).join('')}</div>${s.kind==='open'?`<small>Alex is gifting to ${s.recipients.map(escape).join(' and ')}. Open Alex’s session and one of those recipient sessions side by side: enable their bell, then add an item as the recipient.</small>`:''}</section>`).join('')}
+ <p>Try the notification bells, send a wishlist nudge, and inspect the captured emails. Each person’s button opens their own session. Alex has edit access to everyone’s existing items. Each seven-person event has 12 guesses per person. The three events below demonstrate each guessing phase.</p>
+ ${scenarios.map(s=>`<section class="review-card"><h2>${escape(s.label)}</h2><p>${escape(s.description)}</p><div class="people">${s.people.map(p=>`<a href="/wishlists?token=${encodeURIComponent(p.token)}" target="_blank" rel="noopener">Open as ${escape(p.name)}${p.name==='Alex'?' · admin':''}</a>`).join('')}</div>${s.kind==='open'?`<small>Alex is gifting to ${s.recipients.map(escape).join(' and ')}. Open Alex’s session and one of those recipient sessions side by side: enable their bell, then add an item as the recipient.</small>`:''}</section>`).join('')}
  <p><a href="/review/emails">Open the email preview inbox ↗</a></p>`)));
 app.get('/review/emails',(_req,res)=>res.send(shell('Email preview inbox',`
  <h1>A little Christmas post.</h1><p>Notifications and nudges appear here. Refresh after trying an action.</p>
@@ -35,7 +35,7 @@ async function seed(kind,date,label,description){
  const base=process.env.BASE_URL;
  const response=await fetch(base+'/api/admin/seed',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
   secret:process.env.ADMIN_SECRET,eventName:`Family Christmas — ${label}`,eventDate:date,location:'Preview family gathering',
-  participants:['Alex','Blair','Casey','Drew','Eden'].map(name=>({name,email:`${name.toLowerCase()}@example.test`})),
+  participants:['Alex','Blair','Casey','Drew','Eden','Finley','Georgia'].map(name=>({name,email:`${name.toLowerCase()}@example.test`})),
   tiers:[{name:'BIG GIFT',budgetCents:5000},{name:'small gift',budgetCents:2000}],
  })});
  const result=await response.json();if(!response.ok)throw new Error(result.error || 'Could not create review event');
@@ -45,14 +45,15 @@ async function seed(kind,date,label,description){
   const me=db.prepare('SELECT * FROM participants WHERE invite_token=?').get(person.token);person.id=me.id;
   db.prepare('UPDATE participants SET has_drawn=1 WHERE id=?').run(person.id);
   await fetch(base+'/api/wishlist/item',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:person.token,
-   title:['A lovely coffee mug','A cosy winter scarf','A new favourite book','Something for the garden','A little skincare treat'][index],
-   price_cents:[2000,4900,1850,3500,2500][index],notes:['Blue or forest green, please.','Soft wool, any neutral colour.','I love a good mystery.','A pair of gardening gloves would be lovely.','Something gentle for sensitive skin.'][index]})});
-  let answers=db.prepare('SELECT tier_id,giver_id FROM assignments WHERE event_id=? AND recipient_id=? ORDER BY tier_id').all(result.event.id,person.id);
-  if(index===2)answers=answers.map((answer,i)=>({...answer,giver_id:answers[1-i].giver_id}));
-  if(index===3)answers=answers.slice(0,1);
-  if(index===4)answers=[];
-  for(const answer of answers)db.prepare('INSERT INTO gifter_guesses(event_id,participant_id,tier_id,guessed_gifter_id,edited_at) VALUES(?,?,?,?,?)')
-   .run(result.event.id,person.id,answer.tier_id,answer.giver_id,editTime+index*60*1000);
+   title:['A lovely coffee mug','A cosy winter scarf','A new favourite book','Something for the garden','A little skincare treat','A puzzle for a rainy day','A handy little toolbox'][index],
+   price_cents:[2000,4900,1850,3500,2500,2000,4500][index],notes:['Blue or forest green, please.','Soft wool, any neutral colour.','I love a good mystery.','A pair of gardening gloves would be lovely.','Something gentle for sensitive skin.','A landscape with lots of detail.','Something small for everyday fixes.'][index]})});
+  let answers=db.prepare('SELECT tier_id,recipient_id,giver_id FROM assignments WHERE event_id=? AND giver_id<>? ORDER BY recipient_id,tier_id').all(result.event.id,person.id);
+  // Complete correct ballots demonstrate score/average ties. Other sample
+  // participants leave some guesses blank so the board has realistic variety.
+  if(index>=2)answers=answers.slice(0,Math.max(0,12-index*2));
+  for(const answer of answers)db.prepare('INSERT INTO gifter_guesses(event_id,participant_id,recipient_id,tier_id,guessed_gifter_id,edited_at) VALUES(?,?,?,?,?,?)')
+   .run(result.event.id,person.id,answer.recipient_id,answer.tier_id,answer.giver_id,editTime+index*60*1000);
+
  }
  const recipients=db.prepare('SELECT DISTINCT p.name FROM assignments a JOIN participants p ON p.id=a.recipient_id WHERE a.event_id=? AND a.giver_id=?').all(result.event.id,people[0].id).map(row=>row.name);
  return {kind,label,description,people,recipients};

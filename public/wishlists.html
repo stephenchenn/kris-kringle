@@ -75,14 +75,17 @@
             </section>
             <p id="msg_add" class="muted feedback" role="status" aria-live="polite"></p>
             <div id="notice" class="muted" role="status" aria-live="polite"></div>
+            <p id="wishlist-admin-note" class="game-copy" hidden>You have wishlist edit access. You can correct existing items on anyone’s list.</p>
             <div id="root" class="grid"></div>
             <section id="gifter-game" class="game-section" aria-labelledby="gifter-game-title" hidden>
-                <div class="section-heading"><div><p class="eyebrow">WHO’S BEHIND THE SURPRISE?</p><h2 id="gifter-game-title">Guess your gifters</h2></div><span class="game-sparkle" aria-hidden="true">✧</span></div>
+                <div class="section-heading"><div><p class="eyebrow">WHO’S BEHIND THE SURPRISE?</p><h2 id="gifter-game-title">Guess the gifters</h2></div><span class="game-sparkle" aria-hidden="true">✧</span></div>
                 <p id="gifter-game-status" class="game-status" role="status" aria-live="polite"></p>
                 <div class="guess-form-card">
                     <h3 id="your-guesses-title">A little detective work</h3>
-                    <p class="game-copy">One guess for each gift tier. Your guesses are public, so give everyone something to talk about.</p>
+                    <p class="game-copy">Guess who’s giving each person their gifts, tier by tier. Skip the gifts you’re giving — you already know those! Your guesses are public. Each gifter gives once per tier; clear a pick first if you want to swap names.</p>
+                    <p class="game-copy">A complete public ballot leaves your own gifts blank, so others may work out who you’re gifting to.</p>
                     <form id="gifter-guess-form">
+                        <p id="guess-progress" class="guess-progress" aria-live="polite"></p>
                         <div id="gifter-guess-fields" class="guess-fields"></div>
                         <button id="save-guesses" type="submit" disabled>Save my guesses</button>
                         <p id="guesses-feedback" class="game-feedback" role="status" aria-live="polite"></p>
@@ -382,6 +385,7 @@
         function renderAll(data) {
             root.innerHTML = '';
             const meId = data.me?.id;
+            document.getElementById('wishlist-admin-note').hidden = !data.me?.is_wishlist_admin;
             const allowed = new Set(data.allowed_owner_ids || []);
             const collapsedMap = loadCollapsedMap();
 
@@ -504,8 +508,8 @@
                         const box = document.createElement('div');
                         box.className = 'item';
 
-                        // My items: toolbar with Edit + Delete + inline editor
-                        if (owner.id === meId) {
+                        // Owners get Edit + Delete; the designated admin gets Edit only.
+                        if (owner.id === meId || data.me?.is_wishlist_admin) {
                             const bar = document.createElement('div');
                             bar.className = 'item-toolbar';
                             box.classList.add('has-toolbar');
@@ -518,7 +522,8 @@
                             del.className = 'delete-btn';
                             del.textContent = 'Delete';
 
-                            bar.append(edit, del);
+                            bar.append(edit);
+                            if (owner.id === meId) bar.append(del);
                             box.appendChild(bar);
 
                             // Inline edit form (hidden by default)

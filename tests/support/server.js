@@ -15,6 +15,7 @@ async function startServer(options = {}) {
       EMAIL_PREVIEW_DIR: path.join(directory, 'emails'),
       FROM_EMAIL: 'Test Kris Kringle <no-reply@example.test>',
       EVENT_TEST_NOW: options.now || '',
+      WISHLIST_ADMIN_EMAIL: options.adminEmail ?? '',
     },
     stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
   });

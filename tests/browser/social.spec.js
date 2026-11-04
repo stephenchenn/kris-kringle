@@ -12,7 +12,7 @@ const card=(page,owner)=>page.locator('#root > .card').filter({has:page.locator(
 test('recipient bells, anonymous nudges and public editable guesses work together',async({browser},testInfo)=>{
  const server=await startServer();const contexts=[];const errors=[];
  try{
-  const {people}=await server.seed();await drawAll(server,people);
+  const {people}=await server.seed({participants:['Alex','Blair','Casey','Drew','Eden','Finley','Georgia'].map(name=>({name,email:`${name.toLowerCase()}@example.test`}))});await drawAll(server,people);
   const owner=people[0],givers=people.filter(p=>p.recipients.some(r=>r.recipient===owner.name));
   const viewer=givers[0],outsider=people.find(p=>p!==owner&&!givers.includes(p));
   for(const person of [owner,...givers,outsider]){
@@ -48,17 +48,23 @@ test('recipient bells, anonymous nudges and public editable guesses work togethe
   await expect.poll(()=>server.emails().filter(mail=>mail.subject.includes('added a wishlist idea')).length).toBe(1);
 
   await expect(viewer.page.locator('#gifter-game')).toBeVisible();
-  const selects=viewer.page.locator('.guess-field select');await expect(selects).toHaveCount(2);
-  await selects.nth(0).selectOption(owner.id);await selects.nth(1).selectOption(outsider.id);
+  const selects=viewer.page.locator('.guess-field select');await expect(selects).toHaveCount(12);
+  await expect(viewer.page.locator('.guess-known')).toHaveCount(2);
+  const db=new Database(path.join(server.directory,'db.sqlite'),{readonly:true});
+  const guesses=db.prepare('SELECT recipient_id,tier_id,giver_id FROM assignments WHERE giver_id<>? LIMIT 2').all(viewer.id);db.close();
+  const selectFor=guess=>viewer.page.locator(`select[data-recipient-id="${guess.recipient_id}"][data-tier-id="${guess.tier_id}"]`);
+  for(const guess of guesses)await selectFor(guess).selectOption(guess.giver_id);
   await viewer.page.getByRole('button',{name:'Save my guesses',exact:true}).click();
   await expect(viewer.page.locator('#guesses-feedback')).toContainText('Guesses saved');
   await owner.page.reload();
   const publicGuess=owner.page.locator('.guess-card').filter({has:owner.page.getByRole('heading',{name:viewer.name,exact:true})});
-  await expect(publicGuess).toContainText(outsider.name);await expect(publicGuess).toContainText(owner.name);
-  const replacement=people.find(p=>p!==viewer&&p!==owner&&p!==outsider);
-  await selects.nth(0).selectOption(replacement.id);await viewer.page.getByRole('button',{name:'Save my guesses',exact:true}).click();
+  await publicGuess.locator('summary').click();
+  for(const guess of guesses)await expect(publicGuess).toContainText(people.find(p=>p.id===guess.giver_id).name);
+  const options=await selectFor(guesses[0]).locator('option').evaluateAll(options=>options.filter(option=>option.value&&!option.disabled&&!option.selected).map(option=>option.value));
+  const replacement=people.find(p=>p.id===options[0]);expect(replacement).toBeTruthy();
+  await selectFor(guesses[0]).selectOption(replacement.id);await viewer.page.getByRole('button',{name:'Save my guesses',exact:true}).click();
   await expect(viewer.page.locator('#guesses-feedback')).toContainText('Guesses saved');await owner.page.reload();
-  await expect(publicGuess).toContainText(replacement.name);
+  await publicGuess.locator('summary').click();await expect(publicGuess).toContainText(replacement.name);
   expect(await viewer.page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
   expect(errors).toEqual([]);
  }finally{for(const context of contexts)await context.close();await server.stop();server.remove();}
@@ -69,7 +75,7 @@ test('event-day lock and results leaderboard appear at the correct times',async(
  try{
   const seeded=await server.seed();await drawAll(server,seeded.people);const person=seeded.people[0];
   const db=new Database(path.join(server.directory,'db.sqlite'),{readonly:true});
-  const guesses=db.prepare('SELECT tier_id,giver_id guessed_gifter_id FROM assignments WHERE recipient_id=?').all(person.id);db.close();
+  const guesses=db.prepare('SELECT recipient_id,tier_id,giver_id guessed_gifter_id FROM assignments WHERE giver_id<>?').all(person.id);db.close();
   await server.request('PUT','/api/wishlist/guesses',{token:person.token,guesses});
   const visit=()=>page.goto(`${server.baseUrl}/wishlists?token=${person.token}`);
   await visit();await expect(page.locator('#save-guesses')).toBeEnabled();
@@ -84,7 +90,37 @@ test('event-day lock and results leaderboard appear at the correct times',async(
   await expect(page.locator('#guesses-board-title')).toHaveText('The great gifter reveal');
   await expect(page.locator('#save-guesses')).toBeDisabled();
   const first=page.locator('.guess-card').first();await expect(first).toContainText(person.name);
-  await expect(first).toContainText('2 of 2 correct');await expect(first.locator('.guess-rank')).toHaveText('#1');
-  await expect(first.locator('.guess-verdict.correct')).toHaveCount(2);
+  await expect(first).toContainText('8 of 8 correct');await expect(first.locator('.guess-rank')).toHaveText('#1');
+  await expect(first.locator('.guess-verdict.correct')).toHaveCount(8);
  }finally{await server.stop();server.remove();}
+});
+
+test('wishlist admin sees Edit on other lists while owners retain Delete and other users cannot edit',async({browser},testInfo)=>{
+ const server=await startServer({adminEmail:'alex@example.test'});const contexts=[];
+ try{
+  const {people}=await server.seed();await drawAll(server,people);const [admin,owner,other]=people;
+  await server.request('POST','/api/wishlist/item',{token:owner.token,title:'Broken product',url:'https://example.com/borken',price_cents:5000});
+  for(const person of [admin,owner,other]){
+   const context=await browser.newContext({...testInfo.project.use});contexts.push(context);person.page=await context.newPage();
+   await person.page.goto(`${server.baseUrl}/wishlists?token=${person.token}`);
+   if(await card(person.page,owner).locator('.btn-toggle').getAttribute('aria-expanded')==='false')await card(person.page,owner).locator('.btn-toggle').click();
+  }
+  await expect(admin.page.locator('#wishlist-admin-note')).toBeVisible();
+  await expect(other.page.locator('#wishlist-admin-note')).toBeHidden();
+  await expect(card(other.page,owner).getByRole('button',{name:'Edit',exact:true})).toHaveCount(0);
+  await expect(card(admin.page,owner).getByRole('button',{name:'Delete',exact:true})).toHaveCount(0);
+  await expect(card(owner.page,owner).getByRole('button',{name:'Delete',exact:true})).toHaveCount(1);
+  const target=card(admin.page,owner);
+  await target.getByRole('button',{name:'Edit',exact:true}).click();
+  await target.getByLabel('Title *',{exact:true}).fill('Fixed product');
+  await target.getByLabel('Product link',{exact:true}).fill('https://example.com/fixed');
+  await target.getByLabel('Gift Price',{exact:true}).fill('20');
+  await target.getByRole('button',{name:'Update',exact:true}).click();
+  await expect(target).toContainText('Fixed product');
+  await owner.page.reload();
+  if(await card(owner.page,owner).locator('.btn-toggle').getAttribute('aria-expanded')==='false')await card(owner.page,owner).locator('.btn-toggle').click();
+  await expect(card(owner.page,owner)).toContainText('Fixed product');
+  await expect(card(owner.page,owner).getByRole('link',{name:/^View link/})).toHaveAttribute('href','https://example.com/fixed');
+  expect(await admin.page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+ }finally{for(const context of contexts)await context.close();await server.stop();server.remove();}
 });

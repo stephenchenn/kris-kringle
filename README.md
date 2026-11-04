@@ -30,11 +30,32 @@ Recipient wishlist cards have a notification bell and **Send a nudge**. Email
 updates are opt-in for each recipient and include new item details. Nudges are
 anonymous and limited to one per recipient every 24 hours, shared by all gifters.
 
-**Guess your gifters** has one public guess per gift tier. Edits lock at midnight
+**Guess the gifters** lets each participant guess who is giving to every recipient,
+for each tier. Gifts you are giving are already known and cannot be guessed or
+scored: seven people and two tiers gives **12 guesses per person**. Everyone can
+see the guesses; only your own editor labels your already-known assignments.
+Because a complete public ballot leaves just those two slots blank, other players
+can infer which gifts you are giving. Review this tradeoff before deploying.
+A participant cannot gift to themselves, each giver gives once per tier, and
+gifters for a recipient must differ across tiers when the draw allows it.
+Edits lock at midnight
 at the start of the event day in Adelaide; results appear at the scheduled event
 time. Most correct guesses wins. Ties use the average last-edit time of correct
 guesses, with earlier guesses first; exact ties share a rank. Saving an unchanged
 guess preserves its time. A date-only event reveals results the following midnight.
+
+Stephen’s invitation (`chen.stephen151@gmail.com`) also grants **edit-only** access
+to existing wishlist items in the same event. Other people retain their usual
+permissions. This grants no access to add or delete someone else’s items, or to
+see reservations on unrelated wishlists. The server matches the stored participant
+email; it does not trust a name or a browser flag. `WISHLIST_ADMIN_EMAIL` can
+override that address; an empty value disables this access. Keep Stephen’s
+personal invitation private, just like any authenticated session.
+
+Amazon product pages also support their main product title, high-resolution image
+and buy-box price. Missing offers and blocked retailers (including LEGO in our
+live check) still need manual details. Foreign currency prices are shown for
+reference and never inserted into the AUD field.
 
 To review these features with temporary sample events and captured emails:
 
@@ -45,6 +66,7 @@ npm run review
 Open http://127.0.0.1:3001/review for editable, locked and finished event examples.
 The preview inbox is at http://127.0.0.1:3001/review/emails. The review command uses
 its own database under the system temporary directory and never delivers email.
+Each sample event has seven people; Alex is the preview-only wishlist admin.
 Use `REVIEW_PORT=3002 npm run review` if port 3001 is busy.
 
 For local development and automated tests:

@@ -13,7 +13,7 @@ const get=(server,p)=>server.request('GET',`/api/wishlist/guesses?token=${p.toke
 const save=(server,p,guesses,extra={})=>server.request('PUT','/api/wishlist/guesses',{token:p.token,guesses,...extra});
 function answers(server,seeded,p){
  const db=new Database(path.join(server.directory,'db.sqlite'),{readonly:true});
- try{return db.prepare('SELECT tier_id,giver_id guessed_gifter_id FROM assignments WHERE event_id=? AND recipient_id=?').all(seeded.event.id,p.id);}
+ try{return db.prepare('SELECT recipient_id,tier_id,giver_id guessed_gifter_id FROM assignments WHERE event_id=? AND recipient_id=?').all(seeded.event.id,p.id);}
  finally{db.close();}
 }
 
@@ -29,23 +29,23 @@ test('guesses are public, tier-specific and validated without exposing answers b
  const otherToken=other.people[0].token;
  assert.equal((await get(server,{token:otherToken})).status,403);
  const wrongPerson=(await server.request('GET',`/api/me?token=${otherToken}`)).data.me.id;
- const invalid=[null,[],[{tier_id:tiers[0].id,guessed_gifter_id:p.id}],
-  [{tier_id:tiers[0].id,guessed_gifter_id:wrongPerson}],
-  [{tier_id:other.event.tiers[0].id,guessed_gifter_id:q.id}],
-  [{tier_id:tiers[0].id,guessed_gifter_id:q.id},{tier_id:tiers[0].id,guessed_gifter_id:people[2].id}],
-  tiers.map(tier=>({tier_id:tier.id,guessed_gifter_id:q.id}))];
+ const invalid=[null,[],[{recipient_id:p.id,tier_id:tiers[0].id,guessed_gifter_id:p.id}],
+  [{recipient_id:p.id,tier_id:tiers[0].id,guessed_gifter_id:wrongPerson}],
+  [{recipient_id:p.id,tier_id:other.event.tiers[0].id,guessed_gifter_id:q.id}],
+  [{recipient_id:p.id,tier_id:tiers[0].id,guessed_gifter_id:q.id},{recipient_id:p.id,tier_id:tiers[0].id,guessed_gifter_id:people[2].id}],
+  tiers.map(tier=>({recipient_id:p.id,tier_id:tier.id,guessed_gifter_id:q.id}))];
  for(const guesses of invalid)assert.equal((await save(server,p,guesses)).status,400);
  const valid=answers(server,seeded,p);
  const saved=await save(server,p,valid,{participant_id:q.id,edited_at:'2000-01-01T00:00:00Z'});
  assert.equal(saved.status,200);
  const own=saved.data.rows.find(row=>row.participant.id===p.id);
- assert(own.guesses.every(g=>g.edited_at==='2026-12-24T00:00:00.000Z'),'server supplies timestamps');
+ assert(own.guesses.filter(g=>g.guessed_gifter_id).every(g=>g.edited_at==='2026-12-24T00:00:00.000Z'),'server supplies timestamps');
  assert(saved.data.rows.find(row=>row.participant.id===q.id).guesses.every(g=>!g.guessed_gifter_id),'cannot edit somebody else’s guesses');
  const publicView=await get(server,q);
  assert.deepEqual(publicView.data.rows.find(row=>row.participant.id===p.id),own);
  assert(!JSON.stringify(publicView.data).includes('actual_gifter'));
  for(const person of people)assert(!JSON.stringify(publicView.data).includes(person.token));
- const clear=await save(server,p,[{tier_id:valid[0].tier_id,guessed_gifter_id:null}]);assert.equal(clear.status,200);
+ const clear=await save(server,p,[{recipient_id:p.id,tier_id:valid[0].tier_id,guessed_gifter_id:null}]);assert.equal(clear.status,200);
  assert.equal(clear.data.rows.find(row=>row.participant.id===p.id).guesses.filter(g=>g.guessed_gifter_id).length,1);
 });
 
@@ -57,13 +57,13 @@ test('unchanged guesses preserve time, changes update only that tier, and event-
  await restart('2026-12-24T01:00:00Z');
  const repeated=(await save(server,p,actual)).data.rows.find(row=>row.participant.id===p.id);assert.deepEqual(repeated,first);
  const replacement=seeded.people.find(person=>person.id!==p.id && !actual.some(guess=>guess.guessed_gifter_id===person.id));
- const partial=(await save(server,p,[{tier_id:actual[0].tier_id,guessed_gifter_id:replacement.id}])).data.rows.find(row=>row.participant.id===p.id);
- assert.equal(partial.guesses.find(g=>g.tier_id===actual[0].tier_id).edited_at,'2026-12-24T01:00:00.000Z');
- assert.equal(partial.guesses.find(g=>g.tier_id===actual[1].tier_id).edited_at,'2026-12-24T00:00:00.000Z');
+ const partial=(await save(server,p,[{recipient_id:p.id,tier_id:actual[0].tier_id,guessed_gifter_id:replacement.id}])).data.rows.find(row=>row.participant.id===p.id);
+ assert.equal(partial.guesses.find(g=>g.recipient_id===p.id && g.tier_id===actual[0].tier_id).edited_at,'2026-12-24T01:00:00.000Z');
+ assert.equal(partial.guesses.find(g=>g.recipient_id===p.id && g.tier_id===actual[1].tier_id).edited_at,'2026-12-24T00:00:00.000Z');
  // Swap the gifters so both remain distinct and only changed rows get new times.
  const swapped=actual.map((guess,i)=>({...guess,guessed_gifter_id:actual[1-i].guessed_gifter_id}));
  const updated=(await save(server,p,swapped)).data.rows.find(row=>row.participant.id===p.id);
- assert(updated.guesses.every(g=>g.edited_at==='2026-12-24T01:00:00.000Z'));
+ assert(updated.guesses.filter(g=>g.guessed_gifter_id).every(g=>g.edited_at==='2026-12-24T01:00:00.000Z'));
  await restart('2026-12-24T13:29:59.999Z');assert.equal((await save(server,p,actual)).status,200);
  await restart('2026-12-24T13:30:00Z');
  assert.equal((await save(server,p,swapped)).status,409);
@@ -95,7 +95,7 @@ test('leaderboard ranks by correct tiers, average last-edit time and shared rank
  assert.equal(row(a).average_correct_guess_ms,base);assert.equal(row(b).average_correct_guess_ms,base);
  assert.equal(row(a).rank,1);assert.equal(row(b).rank,1);assert.equal(row(c).rank,3);
  assert.equal(row(d).correct_count,1);assert.equal(row(d).rank,4);assert.equal(row(e).correct_count,0);assert.equal(row(e).rank,5);
- assert(row(a).guesses.every(g=>g.correct&&g.actual_gifter_name));
+ assert(row(a).guesses.filter(g=>g.guessed_gifter_id).every(g=>g.correct&&g.actual_gifter_name));
  const after=new Database(path.join(server.directory,'db.sqlite'),{readonly:true});
  try{assert.deepEqual(after.prepare('SELECT * FROM assignments ORDER BY id').all(),allocation);}finally{after.close();}
 });
@@ -106,8 +106,68 @@ test('repeated gifters are allowed when there are more tiers than other particip
   tiers:[1,2,3].map(i=>({name:`Gift ${i}`,budgetCents:2000})),eventDate:null});
  const [p,q]=seeded.people;
  for(const person of seeded.people){await server.request('POST','/api/draw',{token:person.token});person.id=(await server.request('GET',`/api/me?token=${person.token}`)).data.me.id;}
- const guesses=seeded.event.tiers.map(tier=>({tier_id:tier.id,guessed_gifter_id:q.id}));
+ const guesses=seeded.event.tiers.map(tier=>({recipient_id:p.id,tier_id:tier.id,guessed_gifter_id:q.id}));
  assert.equal((await get(server,p)).data.phase,'unavailable');assert.equal((await save(server,p,guesses)).status,409);
  await server.request('POST','/api/admin/event/update',{secret:server.secret,eventId:seeded.event.id,eventDate:'2026-12-25T18:00:00+10:30'});
  assert.equal((await save(server,p,guesses)).status,200);
+});
+
+test('seven-person ballots have 12 guesses, exclude known outgoing gifts, and score every other recipient',async t=>{
+ let server=await startServer({now:'2026-12-24T00:00:00Z'});t.after(async()=>{await server.stop();server.remove();});
+ const seeded=await server.seed({participants:['A','B','C','D','E','F','G'].map(name=>({name,email:`${name}@example.test`}))});
+ for(const p of seeded.people){await server.request('POST','/api/draw',{token:p.token});p.id=(await server.request('GET',`/api/me?token=${p.token}`)).data.me.id;}
+ const [p,q]=seeded.people;
+ const db=new Database(path.join(server.directory,'db.sqlite'),{readonly:true});
+ const allocation=db.prepare('SELECT recipient_id,tier_id,giver_id FROM assignments WHERE event_id=?').all(seeded.event.id);db.close();
+ const initial=(await get(server,p)).data;
+ assert.equal(initial.guess_count,12);assert.equal(initial.known_assignments.length,2);
+ assert.deepEqual(initial.known_assignments.map(g=>`${g.recipient_id}:${g.tier_id}`).sort(),allocation.filter(g=>g.giver_id===p.id).map(g=>`${g.recipient_id}:${g.tier_id}`).sort());
+ const valid=allocation.filter(g=>g.giver_id!==p.id).map(g=>({recipient_id:g.recipient_id,tier_id:g.tier_id,guessed_gifter_id:g.giver_id}));
+ assert.equal((await save(server,p,valid)).status,200);
+ // No answer oracle: a valid, consistent but wrong pick is accepted as a guess.
+ const target=allocation.find(g=>g.giver_id!==q.id);
+ const replacement=seeded.people.find(person=>person.id!==q.id && person.id!==target.recipient_id && person.id!==target.giver_id);
+ assert.equal((await save(server,q,[{recipient_id:target.recipient_id,tier_id:target.tier_id,guessed_gifter_id:replacement.id}])).status,200);
+ // A giver cannot be used twice in the same tier, even for different people.
+ const qKnown=(await get(server,q)).data.known_assignments;
+ const sameTier=seeded.event.tiers[0].id;
+ const guessGiver=seeded.people.find(person=>person.id!==q.id);
+ const recipients=seeded.people.filter(person=>person.id!==guessGiver.id && !qKnown.some(known=>known.recipient_id===person.id && known.tier_id===sameTier)).slice(0,2);
+ const beforeRejected=(await get(server,q)).data.rows;
+ assert.equal((await save(server,q,recipients.map(person=>({recipient_id:person.id,tier_id:sameTier,guessed_gifter_id:guessGiver.id})))).status,400);
+ assert.deepEqual((await get(server,q)).data.rows,beforeRejected,'invalid batches do not partially overwrite a ballot');
+ for(const known of initial.known_assignments)assert.equal((await save(server,p,[{...known,guessed_gifter_id:q.id}])).status,400);
+ assert.equal((await save(server,p,[{...valid[0],guessed_gifter_id:valid[0].recipient_id}])).status,400);
+ assert.equal((await save(server,p,[{...valid[0],guessed_gifter_id:p.id}])).status,400);
+ const foreign=await server.seed({eventName:'Different event'});
+ const foreignId=(await server.request('GET',`/api/me?token=${foreign.people[0].token}`)).data.me.id;
+ assert.equal((await save(server,p,[{...valid[0],recipient_id:foreignId}])).status,400);
+ // Public rows are identical for every viewer, with uniform unguessed blanks.
+ const publicView=(await get(server,q)).data;
+ assert.deepEqual(publicView.rows, (await get(server,p)).data.rows);
+ assert(!JSON.stringify(publicView.rows).includes('excluded'));
+ assert(!JSON.stringify(publicView.rows).includes('actual_gifter'));
+ const next={directory:server.directory,secret:server.secret,now:'2026-12-25T07:30:00Z'};await server.stop();server=await startServer(next);
+ const result=(await get(server,p)).data.rows.find(row=>row.participant.id===p.id);
+ assert.equal(result.correct_count,12);assert.equal(result.possible_count,12);
+ assert.equal(result.guesses.filter(g=>g.excluded).length,2);
+});
+
+test('legacy own-gifter guesses migrate to the same recipient with original picks and times',async t=>{
+ let {server,seeded}=await ready();t.after(async()=>{await server.stop();server.remove();});
+ const person=seeded.people[0],guess=answers(server,seeded,person)[0],timestamp=Date.parse('2026-12-20T00:00:00Z');
+ const {directory,secret}=server;await server.stop();
+ const db=new Database(path.join(directory,'db.sqlite'));
+ db.exec(`DROP TABLE gifter_guesses; CREATE TABLE gifter_guesses (
+  event_id TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+  participant_id TEXT NOT NULL REFERENCES participants(id) ON DELETE CASCADE,
+  tier_id TEXT NOT NULL REFERENCES gift_tiers(id) ON DELETE CASCADE,
+  guessed_gifter_id TEXT NOT NULL REFERENCES participants(id) ON DELETE CASCADE,
+  edited_at INTEGER NOT NULL, PRIMARY KEY(event_id,participant_id,tier_id));`);
+ db.prepare('INSERT INTO gifter_guesses VALUES(?,?,?,?,?)').run(seeded.event.id,person.id,guess.tier_id,guess.guessed_gifter_id,timestamp);db.close();
+ server=await startServer({directory,secret,now:'2026-12-24T00:00:00Z'});
+ const migrated=(await get(server,person)).data.rows.find(row=>row.participant.id===person.id).guesses.filter(g=>g.guessed_gifter_id);
+ assert.equal(migrated.length,1);assert.equal(migrated[0].recipient_id,person.id);
+ assert.equal(migrated[0].guessed_gifter_id,guess.guessed_gifter_id);assert.equal(Date.parse(migrated[0].edited_at),timestamp);
+ const check=new Database(path.join(directory,'db.sqlite'),{readonly:true});assert.deepEqual(check.pragma('foreign_key_check'),[]);check.close();
 });
