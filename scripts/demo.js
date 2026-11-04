@@ -14,7 +14,7 @@ process.env.ADMIN_SECRET = randomUUID();
 process.env.PORT = process.env.DEMO_PORT || '3000';
 process.env.BASE_URL = `http://localhost:${process.env.PORT}`;
 
-const { app, db, transporter } = require('../server');
+const { app, db, transporter, giftFeatures } = require('../server');
 const server = app.listen(Number(process.env.PORT), '127.0.0.1', async () => {
   const base = process.env.BASE_URL;
   try {
@@ -54,12 +54,12 @@ const server = app.listen(Number(process.env.PORT), '127.0.0.1', async () => {
 server.on('error', error => {
   console.error(error.code === 'EADDRINUSE'
     ? 'Port is already in use. Stop the other server or set DEMO_PORT=3001.' : error.message);
-  db.close();
-  transporter.close();
+  giftFeatures.stop().then(() => { db.close(); transporter.close(); });
   process.exitCode = 1;
 });
 function shutdown() {
-  server.close(() => {
+  server.close(async () => {
+    await giftFeatures.stop();
     transporter.close();
     db.close();
   });

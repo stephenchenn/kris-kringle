@@ -76,11 +76,29 @@
             <p id="msg_add" class="muted feedback" role="status" aria-live="polite"></p>
             <div id="notice" class="muted" role="status" aria-live="polite"></div>
             <div id="root" class="grid"></div>
+            <section id="gifter-game" class="game-section" aria-labelledby="gifter-game-title" hidden>
+                <div class="section-heading"><div><p class="eyebrow">WHO’S BEHIND THE SURPRISE?</p><h2 id="gifter-game-title">Guess your gifters</h2></div><span class="game-sparkle" aria-hidden="true">✧</span></div>
+                <p id="gifter-game-status" class="game-status" role="status" aria-live="polite"></p>
+                <div class="guess-form-card">
+                    <h3 id="your-guesses-title">A little detective work</h3>
+                    <p class="game-copy">One guess for each gift tier. Your guesses are public, so give everyone something to talk about.</p>
+                    <form id="gifter-guess-form">
+                        <div id="gifter-guess-fields" class="guess-fields"></div>
+                        <button id="save-guesses" type="submit" disabled>Save my guesses</button>
+                        <p id="guesses-feedback" class="game-feedback" role="status" aria-live="polite"></p>
+                    </form>
+                    <p class="guess-rules">Most correct guesses wins. Ties use the average time you last changed your correct guesses; earlier wins. Saving an unchanged guess keeps its original time.</p>
+                </div>
+                <div class="guess-board-heading"><p class="eyebrow">A LITTLE FRIENDLY SPECULATION</p><h3 id="guesses-board-title">Everyone’s guesses</h3></div>
+                <div id="guesses-board" class="guesses-board"></div>
+            </section>
         </main>
         <footer class="site-footer"><span>A few hints. A happy surprise.</span><span>Made for giving <span aria-hidden="true">✧</span></span></footer>
     </div>
 
     <script src="/product-preview.js" defer></script>
+    <script src="/wishlist-social.js"></script>
+    <script src="/gifter-game.js" defer></script>
     <script>
         const qs = new URLSearchParams(location.search);
         const token = qs.get('token');
@@ -416,6 +434,9 @@
 
                 header.append(left, right);
                 card.appendChild(header);
+                if (allowed.has(owner.id) && owner.id !== meId) {
+                    window.wishlistSocial.decorate(card, owner, data.recipient_settings?.[owner.id]);
+                }
 
                 // Items panel — default collapsed; use saved state if present
                 const panel = document.createElement('div');

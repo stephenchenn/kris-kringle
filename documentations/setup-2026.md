@@ -175,6 +175,48 @@ service supports them.
 
 ## Local demo and end-to-end tests
 
+### Wishlist notifications, nudges and the guessing game
+
+Run `npm run review` and open `http://127.0.0.1:3001/review`. This creates three
+sample events: before the event, event day with guesses locked, and after the
+event with results. All participants use example addresses. It captures email in
+the local preview inbox at `/review/emails` and keeps its database in a separate
+temporary directory, preserving `.local` and the server's family event.
+
+For a notification walkthrough, open Alex and one of the recipients listed on
+the review home page in separate tabs. Enable the recipient's bell in Alex's
+session, then add an item as that recipient. Inspect the item summary and Alex's
+personal wishlist link in the preview inbox. Disable the bell and add another
+item to check the opt-out. Only assigned gifters have these controls. Enabling
+updates displays advice about Spam and marking messages as **Not spam**.
+
+Send a nudge and inspect its email: the recipient sees an anonymous request and
+their own wishlist link. All gifters share the same recipient's 24-hour cooldown.
+Messages are kept in a durable queue, retry temporary delivery failures up to
+five times, and survive restarts. New-item notifications are separate from edits
+and reservations; queued notifications are cancelled if the recipient's gifter
+has disabled updates before delivery.
+
+Each tier has one public gifter guess. Users can save partial guesses, change or
+clear them, and see other participants' current guesses. Guesses must name
+another participant in the same event. When distinct gifters are possible,
+repeat guesses across tiers are rejected. The server timestamps each changed
+guess; unchanged saves preserve its original time.
+
+Event timing uses `events.event_timezone`, which defaults to
+`Australia/Adelaide`. Guess editing stops at midnight at the start of the event
+day. The public board reveals actual gifters and ranks players at the event's
+scheduled timestamp. Date-only events reveal at midnight after that day. Missing
+or invalid dates keep guessing closed. Results sort by correct tier count, then
+the average last-edit timestamp of correct guesses, earliest first. Exact ties
+share a rank. Before the reveal, responses contain no answers or correctness
+flags. These rules also apply to direct API requests.
+
+Automated coverage includes opt-in/out, recipient permissions, email content and
+personal-link privacy, competing reminders, exact cooldown boundaries, retry
+and restart behavior, schema migration, deadline boundaries, public editing,
+score ordering, average-time ties and desktop/mobile controls.
+
 Use Node 22 or later; Node 24 matches deployment:
 
 ```sh

@@ -7,6 +7,8 @@ const { transporter, fromEmail } = require('./lib/email');
 const { seedAssignments } = require('./lib/assignments');
 const { createProductPreview } = require('./lib/product-preview');
 const { PreviewError } = require('./lib/public-page');
+const { installGiftFeatures } = require('./lib/gift-features');
+const { installGifterGame } = require('./lib/gifter-game');
 
 if (!process.env.ADMIN_SECRET) {
   throw new Error('Set ADMIN_SECRET before starting the server');
@@ -777,6 +779,10 @@ app.use(['/api/wishlist', '/api/wishlists'], (req, res, next) => {
 });
 
 const ownerItemColumns = 'id, wishlist_id, title, url, notes, price_cents, image_url, created_at, updated_at';
+const giftFeatures = installGiftFeatures({ app, db, transporter, fromEmail, requireMeByToken,
+  publicBaseUrl, escapeHtml, now: process.env.NODE_ENV === 'test' && process.env.EVENT_TEST_NOW
+    ? () => Date.parse(process.env.EVENT_TEST_NOW) : Date.now });
+installGifterGame({ app, db, requireMeByToken, now: giftFeatures.now });
 
 const productPreview = createProductPreview();
 const previewRequests = new Map();
@@ -824,20 +830,24 @@ app.post('/api/wishlist/item', (req, res) => {
 
   const wid = upsertWishlistForOwner(me.event_id, me.pid);
   const id = randomUUID();
-  db.prepare(`
-    INSERT INTO wishlist_items (id, wishlist_id, title, url, notes, price_cents, image_url)
-    VALUES (?,?,?,?,?,?,?)
-  `).run(
-    id,
-    wid,
-    String(title).trim(),
-    url || null,
-    notes || null,
-    Number.isInteger(price_cents) ? price_cents : null,
-    image_url || null
-  );
+  const row = db.transaction(() => {
+    db.prepare(`
+      INSERT INTO wishlist_items (id, wishlist_id, title, url, notes, price_cents, image_url)
+      VALUES (?,?,?,?,?,?,?)
+    `).run(
+      id,
+      wid,
+      String(title).trim(),
+      url || null,
+      notes || null,
+      Number.isInteger(price_cents) ? price_cents : null,
+      image_url || null
+    );
 
-  const row = db.prepare(`SELECT ${ownerItemColumns} FROM wishlist_items WHERE id=?`).get(id);
+    const row = db.prepare(`SELECT ${ownerItemColumns} FROM wishlist_items WHERE id=?`).get(id);
+    giftFeatures.enqueueWishlistItem(me, row);
+    return row;
+  })();
   res.json({ ok: true, item: row });
 });
 
@@ -1058,6 +1068,7 @@ app.get('/api/wishlists/all', (req, res) => {
     tiers: tiers.map(t => ({ id: t.id, name: t.name, budget_cents: t.budget_cents })),
     recipients_by_tier,
     allowed_owner_ids: Array.from(allowedOwnerIds),
+    recipient_settings: giftFeatures.recipientSettings(me),
     participants: people,
     wishlists: people.map(p => byOwner.get(p.id) || { owner: p, items: [] })
   });
@@ -1106,7 +1117,12 @@ app.get("/draw", (req, res) => res.sendFile(indexFile));
 
 if (require.main === module) {
   const port = Number(process.env.PORT || 3000);
-  app.listen(port, () => console.log(`KK server running on http://localhost:${port}`));
+  const server = app.listen(port, () => console.log(`KK server running on http://localhost:${port}`));
+  const shutdown = () => server.close(async () => {
+    await giftFeatures.stop(); transporter.close(); db.close();
+  });
+  process.once('SIGTERM', shutdown);
+  process.once('SIGINT', shutdown);
 }
 
-module.exports = { app, db, transporter };
+module.exports = { app, db, transporter, giftFeatures };

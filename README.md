@@ -26,6 +26,27 @@ In **Add an item**, paste a product link to fill its name, image and price
 automatically. You can edit the details or enter them yourself if a shop blocks
 the lookup.
 
+Recipient wishlist cards have a notification bell and **Send a nudge**. Email
+updates are opt-in for each recipient and include new item details. Nudges are
+anonymous and limited to one per recipient every 24 hours, shared by all gifters.
+
+**Guess your gifters** has one public guess per gift tier. Edits lock at midnight
+at the start of the event day in Adelaide; results appear at the scheduled event
+time. Most correct guesses wins. Ties use the average last-edit time of correct
+guesses, with earlier guesses first; exact ties share a rank. Saving an unchanged
+guess preserves its time. A date-only event reveals results the following midnight.
+
+To review these features with temporary sample events and captured emails:
+
+```sh
+npm run review
+```
+
+Open http://127.0.0.1:3001/review for editable, locked and finished event examples.
+The preview inbox is at http://127.0.0.1:3001/review/emails. The review command uses
+its own database under the system temporary directory and never delivers email.
+Use `REVIEW_PORT=3002 npm run review` if port 3001 is busy.
+
 For local development and automated tests:
 
 ```sh

@@ -6,6 +6,7 @@
     "test": "node --test tests/*.test.js",
     "test:e2e": "playwright test",
     "demo": "node scripts/demo.js",
+    "review": "node scripts/review.js",
     "event:create": "node scripts/event.js create",
     "event:invite": "node scripts/event.js invite",
     "event:wishlists": "node scripts/event.js wishlists",
