@@ -107,6 +107,16 @@
 
     <script src="/product-preview.js" defer></script>
     <script src="/wishlist-social.js"></script>
+    <dialog id="guess-picker" class="guess-picker" aria-labelledby="guess-picker-title" aria-describedby="guess-picker-context">
+        <div class="guess-picker-handle" aria-hidden="true"></div>
+        <div class="guess-picker-heading">
+            <div><p class="eyebrow">A LITTLE DETECTIVE WORK</p><h2 id="guess-picker-title">Choose a gifter</h2><p id="guess-picker-context"></p></div>
+            <button id="guess-picker-close" class="guess-picker-close" type="button" aria-label="Close gifter picker">✕</button>
+        </div>
+        <div id="guess-picker-options" class="guess-picker-options" role="group" aria-label="Gifter choices"></div>
+        <button id="guess-picker-clear" class="guess-picker-clear" type="button">Clear this guess</button>
+    </dialog>
+    <script src="/gifter-picker.js" defer></script>
     <script src="/gifter-game.js" defer></script>
     <script>
         const qs = new URLSearchParams(location.search);

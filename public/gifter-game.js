@@ -13,18 +13,27 @@
   const publishButton=document.getElementById('publish-results');
   const publishFeedback=document.getElementById('publish-results-feedback');
   let state=null,dirty=false,saving=false,publishing=false;
+  let editorKey='',boardKey='';
   const money=cents=>new Intl.NumberFormat('en-AU',{style:'currency',currency:'AUD',maximumFractionDigits:0}).format(cents/100);
   const date=(value,precise=false)=>value?new Date(value).toLocaleString('en-AU',{timeZone:state.timezone,dateStyle:'medium',timeStyle:precise?'medium':'short'}):'—';
   function duplicateOptions(){
     const selects=[...fields.querySelectorAll('select')];
-    for(const select of selects)for(const option of select.options){
-      option.disabled=!!option.value && selects.some(other=>other!==select && other.value===option.value &&
-        (other.dataset.tierId===select.dataset.tierId || (state.tiers.length<=state.participants.length-1 && other.dataset.recipientId===select.dataset.recipientId)));
+    const byTier=new Map(),byRecipient=new Map();
+    for(const select of selects)if(select.value){
+      const tier=`${select.dataset.tierId}:${select.value}`,recipient=`${select.dataset.recipientId}:${select.value}`;
+      byTier.set(tier,(byTier.get(tier)||0)+1);byRecipient.set(recipient,(byRecipient.get(recipient)||0)+1);
     }
+    for(const select of selects)for(const option of select.options){
+      const own=select.value===option.value?1:0;
+      const disabled=!!option.value && ((byTier.get(`${select.dataset.tierId}:${option.value}`)||0)>own ||
+        (state.tiers.length<=state.participants.length-1 && (byRecipient.get(`${select.dataset.recipientId}:${option.value}`)||0)>own));
+      if(option.disabled!==disabled)option.disabled=disabled;
+    }
+    for(const select of selects)window.gifterPicker?.update(select);
     const completed=selects.filter(select=>select.value).length;
     document.getElementById('guess-progress').textContent=`${completed} of ${state.guess_count} guesses picked · Your ${state.known_assignments.length} gifts are already known and don’t count.`;
   }
-  function render(data){
+  function render(data,{forceEditor=false}={}){
     state=data;section.hidden=false;
     const results=data.phase==='results',open=data.phase==='open';
     section.classList.toggle('results',results);
@@ -38,8 +47,12 @@
       : 'Guesses are locked for the event. Waiting for the organiser to publish the results.';
     publishControls.hidden=!data.can_publish_results || results || data.phase==='unavailable';
     publishButton.disabled=publishing;
-    if(!dirty || !open){
+    const nextEditorKey=JSON.stringify([data.me_id,data.phase,data.tiers,data.participants,data.known_assignments,data.my_guesses]);
+    const interacting=fields.contains(document.activeElement) || window.gifterPicker?.isOpen();
+    if((!dirty || !open) && nextEditorKey!==editorKey && (!interacting || forceEditor || !open)){
+      window.gifterPicker?.close();
       fields.replaceChildren();dirty=false;
+      editorKey=nextEditorKey;
       for(const recipient of data.participants){
         const group=document.createElement('fieldset');group.className='guess-recipient';
         const legend=document.createElement('legend');legend.textContent=recipient.name+(recipient.id===data.me_id?' (you)':'');group.append(legend);
@@ -53,6 +66,7 @@
             const hint=document.createElement('span');hint.className='guess-edited';hint.textContent='Already known · not scored';row.append(known,hint);
           }else{
             const select=document.createElement('select');select.id=label.htmlFor;select.dataset.tierId=tier.id;select.dataset.recipientId=recipient.id;select.className='input';select.disabled=!open;
+            select.dataset.recipientName=recipient.name;select.dataset.tierName=tier.name;select.dataset.budget=money(tier.budget_cents);
             const unsure=document.createElement('option');unsure.value='';unsure.textContent='Not sure yet…';select.append(unsure);
             for(const person of data.participants.filter(person=>person.id!==data.me_id && person.id!==recipient.id)){
               const option=document.createElement('option');option.value=person.id;option.textContent=person.name;select.append(option);
@@ -62,6 +76,7 @@
             const edited=document.createElement('span');edited.className='guess-edited';edited.textContent=guess?.edited_at?`Last changed ${date(guess.edited_at,true)}`:'Who do you reckon?';
             select.addEventListener('change',()=>{dirty=true;feedback.textContent='You have unsaved guesses.';duplicateOptions();});
             row.append(select,edited);
+            window.gifterPicker?.enhance(select,label);
           }
           tierFields.append(row);
         }
@@ -71,6 +86,9 @@
     }
     save.disabled=!open || saving;save.textContent=saving?'Saving…':open?'Save my guesses':'Guesses locked';
     document.getElementById('your-guesses-title').textContent=results?'Your guesses, revealed':'A little detective work';
+    const nextBoardKey=JSON.stringify([data.me_id,data.phase,data.timezone,data.participants,data.rows]);
+    if(nextBoardKey===boardKey)return;
+    boardKey=nextBoardKey;
     const expanded=new Set([...board.querySelectorAll('details[open]')].map(details=>details.dataset.participantId));
     board.replaceChildren();
     for(const row of data.rows){
@@ -119,7 +137,7 @@
       const guesses=[...fields.querySelectorAll('select')].map(select=>({recipient_id:select.dataset.recipientId,tier_id:select.dataset.tierId,guessed_gifter_id:select.value || null}));
       const response=await fetch('/api/wishlist/guesses',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({token,guesses})});
       const data=await response.json();if(!response.ok){if(response.status===409)await load();throw new Error(data.error || 'Could not save guesses.');}
-      dirty=false;render(data);feedback.textContent='Guesses saved. Your own-gifter picks are public; your other picks stay private until results are published.';
+      dirty=false;render(data,{forceEditor:true});feedback.textContent='Guesses saved. Your own-gifter picks are public; your other picks stay private until results are published.';
     }catch(error){feedback.textContent=error.message;}
     finally{saving=false;save.disabled=state?.phase!=='open';save.textContent=state?.phase==='open'?'Save my guesses':'Guesses locked';}
   });
@@ -135,6 +153,9 @@
     }catch(error){publishFeedback.textContent=error.message || 'Could not publish results. Please try again.';}
     finally{publishing=false;publishButton.disabled=false;publishButton.textContent='Publish results';}
   });
+  fields.addEventListener('focusout',()=>setTimeout(()=>{
+    if(state && !dirty && !fields.contains(document.activeElement) && !window.gifterPicker?.isOpen())render(state);
+  },0));
   load();
-  setInterval(()=>{if(!document.hidden && !saving)load();},30000);
+  setInterval(()=>{if(!document.hidden && !saving && !publishing)load();},30000);
 })();

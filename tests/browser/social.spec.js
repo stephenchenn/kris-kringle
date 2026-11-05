@@ -8,6 +8,13 @@ async function drawAll(server,people){for(const person of people){
  person.id=(await server.request('GET',`/api/me?token=${person.token}`)).data.me.id;
 }}
 const card=(page,owner)=>page.locator('#root > .card').filter({has:page.locator('.owner',{hasText:new RegExp(`^${owner.name}$`)})});
+async function chooseGuess(page,select,value){
+ if(await select.isVisible()){await select.selectOption(value);return;}
+ await select.locator('..').locator('.guess-picker-trigger').tap();
+ if(value)await page.locator(`#guess-picker-options button[data-value="${value}"]`).tap();
+ else await page.getByRole('button',{name:'Clear this guess',exact:true}).tap();
+}
+
 
 test('recipient bells, anonymous nudges and public editable guesses work together',async({browser},testInfo)=>{
  const server=await startServer();const contexts=[];const errors=[];
@@ -56,7 +63,7 @@ test('recipient bells, anonymous nudges and public editable guesses work togethe
     .find(guess=>!publicPicks.some(pick=>pick.giver_id===guess.giver_id));db.close();
   const guesses=[...publicPicks,privatePick];
   const selectFor=guess=>viewer.page.locator(`select[data-recipient-id="${guess.recipient_id}"][data-tier-id="${guess.tier_id}"]`);
-  for(const guess of guesses)await selectFor(guess).selectOption(guess.giver_id);
+  for(const guess of guesses)await chooseGuess(viewer.page,selectFor(guess),guess.giver_id);
   await viewer.page.getByRole('button',{name:'Save my guesses',exact:true}).click();
   await expect(viewer.page.locator('#guesses-feedback')).toContainText('Guesses saved');
   await owner.page.reload();
@@ -72,7 +79,7 @@ test('recipient bells, anonymous nudges and public editable guesses work togethe
   await viewer.page.reload();await expect(selectFor(privatePick)).toHaveValue(privatePick.giver_id);
   const options=await selectFor(guesses[0]).locator('option').evaluateAll(options=>options.filter(option=>option.value&&!option.disabled&&!option.selected).map(option=>option.value));
   const replacement=people.find(p=>p.id===options[0]);expect(replacement).toBeTruthy();
-  await selectFor(guesses[0]).selectOption(replacement.id);await viewer.page.getByRole('button',{name:'Save my guesses',exact:true}).click();
+  await chooseGuess(viewer.page,selectFor(guesses[0]),replacement.id);await viewer.page.getByRole('button',{name:'Save my guesses',exact:true}).click();
   await expect(viewer.page.locator('#guesses-feedback')).toContainText('Guesses saved');await owner.page.reload();
   await publicGuess.locator('summary').click();await expect(publicGuess).toContainText(replacement.name);
   expect(await viewer.page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);

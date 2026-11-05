@@ -161,6 +161,28 @@ textarea.input { resize: vertical; line-height: 1.6; }
 .guess-field { display: flex; flex-direction: column; gap: 9px; min-width: 0; }
 .guess-field label { font-size: 12px; font-weight: 600; }
 .guess-field select { font: inherit; min-height: 44px; }
+.guess-picker-trigger { display: none; }
+html.guess-picker-open, html.guess-picker-open body { overflow: hidden; }
+.guess-picker { inset: auto 0 0; margin: 0 auto; width: 100%; max-width: 640px; max-height: 80vh; max-height: min(80dvh,640px); overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding: 12px 20px calc(20px + env(safe-area-inset-bottom,0px)); color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 20px 20px 0 0; box-shadow: 0 -12px 40px #182f2726; }
+.guess-picker[open] { display: flex; flex-direction: column; overflow: hidden; }
+.guess-picker::backdrop { background: #172c2466; }
+.guess-picker-handle { flex-shrink: 0; width: 38px; height: 4px; margin: 0 auto 18px; background: #cdd3c8; border-radius: 8px; }
+.guess-picker-heading { flex-shrink: 0; display: flex; align-items: flex-start; gap: 12px; justify-content: space-between; margin-bottom: 20px; }
+.guess-picker-heading h2 { margin: 6px 0 8px; font: 400 27px/1.2 Georgia,serif; }
+#guess-picker-context { color: var(--muted); font-size: 13px; line-height: 1.6; }
+.guess-picker-close { flex: 0 0 44px; padding: 9px; color: var(--ink); background: var(--soft); border-color: transparent; }
+.guess-picker-close:hover:enabled { color: var(--ink); background: #dde6d5; }
+.guess-picker-options { display: grid; gap: 9px; min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding: 4px; margin: 0 -4px; }
+.guess-picker-option { display: flex; align-items: center; justify-content: space-between; gap: 16px; width: 100%; min-height: 56px; padding: 13px 16px; text-align: left; color: var(--ink); background: white; border-color: #cdd3c8; font-size: 16px; font-weight: 500; }
+.guess-picker-copy { display: grid; gap: 5px; overflow-wrap: anywhere; }
+.guess-picker-copy small { font-size: 11px; line-height: 1.5; font-weight: 400; }
+.guess-picker-mark { color: var(--green); font-size: 21px; }
+.guess-picker-option[aria-pressed="true"], .guess-picker-option:hover:enabled { color: var(--green-dark); background: var(--soft); border-color: #73917a; }
+.guess-picker-option:disabled { opacity: 1; color: #727a70; background: #f5f4ee; border-color: #e5e5db; }
+.guess-picker-option:disabled .guess-picker-mark { color: #91988c; }
+.guess-picker-clear { flex-shrink: 0; margin-top: 18px; width: 100%; min-height: 48px; background: transparent; color: var(--green); border-color: var(--line); }
+.guess-picker-clear:hover:enabled { background: var(--soft); }
+.guess-picker-trigger, .guess-picker-option, .guess-picker-clear, .guess-picker-close { touch-action: manipulation; }
 .guess-edited { color: var(--muted); font-size: 11px; line-height: 1.6; }
 .guess-rules { font-size: 11px; line-height: 1.8; color: var(--muted); margin-top: 18px; max-width: 800px; }
 .game-feedback { font-size: 12px; line-height: 1.7; margin-top: 12px; }
@@ -189,6 +211,12 @@ textarea.input { resize: vertical; line-height: 1.6; }
     .guess-form-card h3 { font-size: 24px; }
     .guess-fields { gap: 17px; }
     .guess-field select { font-size: 16px; }
+    .guess-has-picker > select { display: none; }
+    .guess-picker-trigger { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 52px; width: 100%; padding: 12px 14px; background: white; color: var(--ink); border-color: #cdd3c8; text-align: left; font-size: 16px; font-weight: 400; }
+    .guess-picker-trigger > span:first-child { overflow-wrap: anywhere; }
+    .guess-picker-trigger.is-empty { color: var(--muted); }
+    .guess-picker-trigger:hover:enabled { color: var(--ink); background: white; border-color: #73917a; }
+    .guess-picker-chevron { color: var(--green); font-size: 21px; }
     #save-guesses { width: 100%; }
     .guesses-board { grid-template-columns: 1fr; }
 }

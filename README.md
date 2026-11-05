@@ -38,7 +38,10 @@ gifters. Their guesses about other recipients stay private. The full ballot and
 known outgoing gifts are sent only to their authenticated owner; other users,
 including the admin, cannot retrieve them before publication. Hiding whole
 private sections avoids revealing assignments through skipped slots. Publishing
-results makes all ballots visible for the final leaderboard.
+results makes all ballots visible for the final leaderboard. On phones, tap a
+gifter field for a picker with large name buttons, explanations for unavailable
+choices, and **Clear this guess**. Background refreshes preserve active controls
+and unsaved choices instead of replacing a dropdown while it is in use.
 A participant cannot gift to themselves, each giver gives once per tier, and
 gifters for a recipient must differ across tiers when the draw allows it.
 Edits lock at midnight
