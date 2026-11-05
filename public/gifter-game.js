@@ -29,6 +29,9 @@
     const results=data.phase==='results',open=data.phase==='open';
     section.classList.toggle('results',results);
     boardTitle.textContent=results?'The great gifter reveal':'Everyone’s guesses';
+    document.getElementById('guesses-board-note').textContent=results
+      ? 'Full ballots and actual gifters are now visible.'
+      : 'Each person’s guesses about their own gifters. Full ballots stay private until results are published.';
     status.textContent=data.phase==='unavailable'?'The organiser needs to set the event date before guesses open.'
       : open?`Who’s gifting to whom? Edits close ${date(data.locks_at)} (${data.timezone}). Results stay hidden until the organiser publishes them.`
       : results?`Results published ${date(data.published_at)} (${data.timezone}). Most correct guesses wins. Ties go to the earliest average last-edit time of correct guesses.`
@@ -37,7 +40,6 @@
     publishButton.disabled=publishing;
     if(!dirty || !open){
       fields.replaceChildren();dirty=false;
-      const own=data.rows.find(row=>row.participant.id===data.me_id);
       for(const recipient of data.participants){
         const group=document.createElement('fieldset');group.className='guess-recipient';
         const legend=document.createElement('legend');legend.textContent=recipient.name+(recipient.id===data.me_id?' (you)':'');group.append(legend);
@@ -55,7 +57,7 @@
             for(const person of data.participants.filter(person=>person.id!==data.me_id && person.id!==recipient.id)){
               const option=document.createElement('option');option.value=person.id;option.textContent=person.name;select.append(option);
             }
-            const guess=own?.guesses.find(guess=>guess.recipient_id===recipient.id && guess.tier_id===tier.id);
+            const guess=data.my_guesses.find(guess=>guess.recipient_id===recipient.id && guess.tier_id===tier.id);
             select.value=guess?.guessed_gifter_id || '';
             const edited=document.createElement('span');edited.className='guess-edited';edited.textContent=guess?.edited_at?`Last changed ${date(guess.edited_at,true)}`:'Who do you reckon?';
             select.addEventListener('change',()=>{dirty=true;feedback.textContent='You have unsaved guesses.';duplicateOptions();});
@@ -81,9 +83,9 @@
         const score=document.createElement('p');score.className='guess-score';score.textContent=`${row.correct_count} of ${row.possible_count} correct`;card.append(score);
       }
       const details=document.createElement('details');details.dataset.participantId=row.participant.id;details.open=expanded.has(row.participant.id);
-      const summary=document.createElement('summary');summary.textContent=results?'See guesses & answers':'See their guesses';details.append(summary);
-      for(const recipient of data.participants){
-        const recipientHeading=document.createElement('h5');recipientHeading.className='public-guess-recipient';recipientHeading.textContent=`Gifts for ${recipient.name}`;details.append(recipientHeading);
+      const summary=document.createElement('summary');summary.textContent=results?'See guesses & answers':'See their gifter guesses';details.append(summary);
+      for(const recipient of data.participants.filter(person=>row.guesses.some(guess=>guess.recipient_id===person.id))){
+        const recipientHeading=document.createElement('h5');recipientHeading.className='public-guess-recipient';recipientHeading.textContent=results?`Gifts for ${recipient.name}`:'Their guesses about their own gifts';details.append(recipientHeading);
         for(const guess of row.guesses.filter(guess=>guess.recipient_id===recipient.id)){
           const line=document.createElement('p');line.className='public-guess';
           const tier=document.createElement('span');tier.className='public-guess-tier';tier.textContent=guess.tier_name;
@@ -117,7 +119,7 @@
       const guesses=[...fields.querySelectorAll('select')].map(select=>({recipient_id:select.dataset.recipientId,tier_id:select.dataset.tierId,guessed_gifter_id:select.value || null}));
       const response=await fetch('/api/wishlist/guesses',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({token,guesses})});
       const data=await response.json();if(!response.ok){if(response.status===409)await load();throw new Error(data.error || 'Could not save guesses.');}
-      dirty=false;render(data);feedback.textContent='Guesses saved. Everyone can see them on the board.';
+      dirty=false;render(data);feedback.textContent='Guesses saved. Your own-gifter picks are public; your other picks stay private until results are published.';
     }catch(error){feedback.textContent=error.message;}
     finally{saving=false;save.disabled=state?.phase!=='open';save.textContent=state?.phase==='open'?'Save my guesses':'Guesses locked';}
   });

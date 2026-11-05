@@ -32,10 +32,13 @@ anonymous and limited to one per recipient every 24 hours, shared by all gifters
 
 **Guess the gifters** lets each participant guess who is giving to every recipient,
 for each tier. Gifts you are giving are already known and cannot be guessed or
-scored: seven people and two tiers gives **12 guesses per person**. Everyone can
-see the guesses; only your own editor labels your already-known assignments.
-Because a complete public ballot leaves just those two slots blank, other players
-can infer which gifts you are giving. Review this tradeoff before deploying.
+scored: seven people and two tiers gives **12 guesses per person**. Before
+publication, the public board shows only each person’s guesses about their own
+gifters. Their guesses about other recipients stay private. The full ballot and
+known outgoing gifts are sent only to their authenticated owner; other users,
+including the admin, cannot retrieve them before publication. Hiding whole
+private sections avoids revealing assignments through skipped slots. Publishing
+results makes all ballots visible for the final leaderboard.
 A participant cannot gift to themselves, each giver gives once per tier, and
 gifters for a recipient must differ across tiers when the draw allows it.
 Edits lock at midnight

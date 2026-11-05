@@ -67,7 +67,7 @@ const server=app.listen(port,'127.0.0.1',async()=>{
   const today=new Intl.DateTimeFormat('en-CA',{timeZone:'Australia/Adelaide',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
   scenarios=[
    await seed('open',new Date(Date.now()+7*24*60*60*1000).toISOString(),'Before the event','Try saving guesses, then use Alex’s Publish results button whenever you’re ready. You can also follow wishlists and send a nudge.'),
-   await seed('locked',today,'Event day · guesses locked','Guesses remain public, editing is locked, and the answers are still hidden.'),
+   await seed('locked',today,'Event day · guesses locked','Own-gifter guesses remain public, full ballots stay private, and editing is locked until the reveal.'),
    await seed('results',new Date(Date.now()-24*60*60*1000).toISOString(),'Published results · leaderboard','Alex has published this sample event. See correct answers, scores and the earlier-guess tie-breaker.'),
   ];
   console.log(`\nReview ready: ${process.env.BASE_URL}/review`);

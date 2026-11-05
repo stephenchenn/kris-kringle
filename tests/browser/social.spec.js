@@ -51,7 +51,10 @@ test('recipient bells, anonymous nudges and public editable guesses work togethe
   const selects=viewer.page.locator('.guess-field select');await expect(selects).toHaveCount(12);
   await expect(viewer.page.locator('.guess-known')).toHaveCount(2);
   const db=new Database(path.join(server.directory,'db.sqlite'),{readonly:true});
-  const guesses=db.prepare('SELECT recipient_id,tier_id,giver_id FROM assignments WHERE giver_id<>? LIMIT 2').all(viewer.id);db.close();
+  const publicPicks=db.prepare('SELECT recipient_id,tier_id,giver_id FROM assignments WHERE recipient_id=?').all(viewer.id);
+  const privatePick=db.prepare('SELECT recipient_id,tier_id,giver_id FROM assignments WHERE giver_id<>? AND recipient_id<>?').all(viewer.id,viewer.id)
+    .find(guess=>!publicPicks.some(pick=>pick.giver_id===guess.giver_id));db.close();
+  const guesses=[...publicPicks,privatePick];
   const selectFor=guess=>viewer.page.locator(`select[data-recipient-id="${guess.recipient_id}"][data-tier-id="${guess.tier_id}"]`);
   for(const guess of guesses)await selectFor(guess).selectOption(guess.giver_id);
   await viewer.page.getByRole('button',{name:'Save my guesses',exact:true}).click();
@@ -59,7 +62,14 @@ test('recipient bells, anonymous nudges and public editable guesses work togethe
   await owner.page.reload();
   const publicGuess=owner.page.locator('.guess-card').filter({has:owner.page.getByRole('heading',{name:viewer.name,exact:true})});
   await publicGuess.locator('summary').click();
-  for(const guess of guesses)await expect(publicGuess).toContainText(people.find(p=>p.id===guess.giver_id).name);
+  for(const guess of publicPicks)await expect(publicGuess).toContainText(people.find(p=>p.id===guess.giver_id).name);
+  await expect(publicGuess.locator('.public-guess')).toHaveCount(2);
+  await expect(publicGuess.locator('.public-guess-recipient')).toHaveCount(1);
+  await expect(publicGuess.locator('.guess-known')).toHaveCount(0);
+  await expect(publicGuess).not.toContainText('Already known');
+  const privateName=people.find(person=>person.id===privatePick.giver_id).name;
+  expect(await publicGuess.locator('.public-guess strong').allTextContents()).not.toContain(privateName);
+  await viewer.page.reload();await expect(selectFor(privatePick)).toHaveValue(privatePick.giver_id);
   const options=await selectFor(guesses[0]).locator('option').evaluateAll(options=>options.filter(option=>option.value&&!option.disabled&&!option.selected).map(option=>option.value));
   const replacement=people.find(p=>p.id===options[0]);expect(replacement).toBeTruthy();
   await selectFor(guesses[0]).selectOption(replacement.id);await viewer.page.getByRole('button',{name:'Save my guesses',exact:true}).click();

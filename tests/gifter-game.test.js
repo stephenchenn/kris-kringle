@@ -17,7 +17,7 @@ function answers(server,seeded,p){
  finally{db.close();}
 }
 
-test('guesses are public, tier-specific and validated without exposing answers before the reveal',async t=>{
+test('own-gifter guesses are public and tier-specific without exposing answers before publication',async t=>{
  const {server,seeded}=await ready();t.after(async()=>{await server.stop();server.remove();});
  const {people}=seeded,p=people[0],q=people[1],tiers=seeded.event.tiers;
  const initial=await get(server,p);assert.equal(initial.status,200);assert.equal(initial.data.phase,'open');
@@ -137,20 +137,23 @@ test('seven-person ballots have 12 guesses, exclude known outgoing gifts, and sc
  const sameTier=seeded.event.tiers[0].id;
  const guessGiver=seeded.people.find(person=>person.id!==q.id);
  const recipients=seeded.people.filter(person=>person.id!==guessGiver.id && !qKnown.some(known=>known.recipient_id===person.id && known.tier_id===sameTier)).slice(0,2);
- const beforeRejected=(await get(server,q)).data.rows;
+ const beforeRejected=(await get(server,q)).data;
  assert.equal((await save(server,q,recipients.map(person=>({recipient_id:person.id,tier_id:sameTier,guessed_gifter_id:guessGiver.id})))).status,400);
- assert.deepEqual((await get(server,q)).data.rows,beforeRejected,'invalid batches do not partially overwrite a ballot');
+ assert.deepEqual((await get(server,q)).data,beforeRejected,'invalid batches do not partially overwrite a ballot');
  for(const known of initial.known_assignments)assert.equal((await save(server,p,[{...known,guessed_gifter_id:q.id}])).status,400);
  assert.equal((await save(server,p,[{...valid[0],guessed_gifter_id:valid[0].recipient_id}])).status,400);
  assert.equal((await save(server,p,[{...valid[0],guessed_gifter_id:p.id}])).status,400);
  const foreign=await server.seed({eventName:'Different event'});
  const foreignId=(await server.request('GET',`/api/me?token=${foreign.people[0].token}`)).data.me.id;
  assert.equal((await save(server,p,[{...valid[0],recipient_id:foreignId}])).status,400);
- // Public rows are identical for every viewer, with uniform unguessed blanks.
+ // Public rows contain only each person’s own-gifter picks, identically for every viewer.
  const publicView=(await get(server,q)).data;
  assert.deepEqual(publicView.rows, (await get(server,p)).data.rows);
  assert(!JSON.stringify(publicView.rows).includes('excluded'));
  assert(!JSON.stringify(publicView.rows).includes('actual_gifter'));
+ assert(publicView.rows.every(row=>row.guesses.length===2 && row.guesses.every(guess=>guess.recipient_id===row.participant.id)));
+ assert.equal((await get(server,p)).data.my_guesses.length,14);
+ assert.equal((await get(server,p)).data.my_guesses.filter(guess=>guess.guessed_gifter_id).length,12);
  const next={directory:server.directory,secret:server.secret,now:'2026-12-25T07:30:00Z',adminEmail:'a@example.test'};await server.stop();server=await startServer(next);
  assert.equal((await server.request('POST','/api/wishlist/guesses/publish',{token:p.token})).status,200);
  const result=(await get(server,p)).data.rows.find(row=>row.participant.id===p.id);
@@ -207,4 +210,49 @@ test('only the drawn event admin can publish; publication is event-scoped, perma
  await server.request('POST','/api/admin/event/update',{secret:server.secret,eventId:seeded.event.id,eventDate:'2027-12-25T18:00:00+10:30'});
  assert.equal((await get(server,other)).data.phase,'results','moving the date cannot hide published answers or reopen edits');
  assert.equal((await save(server,admin,guesses)).status,409);
+});
+
+test('full ballots and excluded recipient slots stay private from every other viewer, including the admin, until publication',async t=>{
+ let {server,seeded}=await ready();t.after(async()=>{await server.stop();server.remove();});
+ const [admin,author,viewer]=seeded.people;
+ const db=new Database(path.join(server.directory,'db.sqlite'),{readonly:true});
+ const allocation=db.prepare('SELECT recipient_id,tier_id,giver_id guessed_gifter_id FROM assignments WHERE event_id=? AND giver_id<>?').all(seeded.event.id,author.id);db.close();
+ const personal=allocation.filter(guess=>guess.recipient_id===author.id);
+ const privatePicks=allocation.filter(guess=>guess.recipient_id!==author.id);
+ assert.equal(privatePicks.length,6);
+ assert.equal((await save(server,author,personal)).status,200);
+ const beforeAdmin=(await get(server,admin)).data;
+ const beforeViewer=(await get(server,viewer)).data;
+ const saved=await save(server,author,privatePicks);
+ assert.equal(saved.status,200);assert.equal(saved.data.my_guesses.filter(guess=>guess.guessed_gifter_id).length,8);
+ for(const person of seeded.people){
+  const response=(await get(server,person)).data;
+  assert.equal(response.rows.length,5);
+  assert(response.rows.every(row=>row.guesses.length===2 && row.guesses.every(guess=>guess.recipient_id===row.participant.id)),
+    'every public row has the same own-recipient slots, never a map of skipped outgoing gifts');
+  assert(!JSON.stringify(response.rows).includes('excluded'));
+  assert(!JSON.stringify(response.rows).includes('correct_count'));
+  if(person!==author){
+   assert(response.my_guesses.every(guess=>guess.guessed_gifter_id===null),'other ballots are not included in my_guesses');
+   const publicAuthor=response.rows.find(row=>row.participant.id===author.id);
+   assert(publicAuthor.guesses.every(guess=>guess.recipient_id===author.id));
+  }
+ }
+ assert.deepEqual((await get(server,admin)).data,beforeAdmin,'completing someone else’s private guesses does not change even the admin’s API response');
+ assert.deepEqual((await get(server,viewer)).data,beforeViewer,'private counts, choices, timestamps and excluded slots never enter another viewer’s response');
+ // Client flags and participant IDs cannot change whose private ballot is read.
+ const spoofed=await server.request('GET',`/api/wishlist/guesses?token=${viewer.token}&participant_id=${author.id}&includePrivate=true&reveal=true`);
+ assert.deepEqual(spoofed.data,beforeViewer);
+ const restart=async now=>{const {directory,secret}=server;await server.stop();server=await startServer({directory,secret,now,adminEmail:'alex@example.test'});};
+ await restart('2026-12-25T07:30:00Z');
+ const locked=(await get(server,viewer)).data;assert.equal(locked.phase,'locked');
+ assert(locked.rows.every(row=>row.guesses.length===2));
+ assert.equal((await get(server,author)).data.my_guesses.filter(guess=>guess.guessed_gifter_id).length,8,'private picks survive restart and lock');
+ const published=await server.request('POST','/api/wishlist/guesses/publish',{token:admin.token});assert.equal(published.status,200);
+ const revealed=(await get(server,viewer)).data;
+ assert.equal(revealed.phase,'results');assert(revealed.rows.every(row=>row.guesses.length===10));
+ const authorResults=revealed.rows.find(row=>row.participant.id===author.id);
+ assert.equal(authorResults.correct_count,8);assert.equal(authorResults.possible_count,8);
+ assert(authorResults.guesses.filter(guess=>!guess.excluded).every(guess=>guess.correct));
+ assert.equal(authorResults.guesses.filter(guess=>guess.excluded).length,2);
 });
