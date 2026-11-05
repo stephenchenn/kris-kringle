@@ -115,11 +115,12 @@ test('email jobs survive restart, retry failures and respect disabling pending n
 test('event schedule uses Adelaide midnight and handles DST, date-only and missing dates',()=>{
  const event={event_date:'2026-12-25T18:00:00+10:30'};
  const schedule=eventSchedule(event,Date.parse('2026-12-24T13:29:59.999Z'));
- assert.equal(schedule.phase,'open');assert.equal(schedule.locks_at,'2026-12-24T13:30:00.000Z');assert.equal(schedule.reveals_at,'2026-12-25T07:30:00.000Z');
+ assert.equal(schedule.phase,'open');assert.equal(schedule.locks_at,'2026-12-24T13:30:00.000Z');assert.equal(schedule.published_at,null);
  assert.equal(eventSchedule(event,Date.parse(schedule.locks_at)).phase,'locked');
- assert.equal(eventSchedule(event,Date.parse(schedule.reveals_at)).phase,'results');
+ assert.equal(eventSchedule(event,Date.parse('2026-12-26T07:30:00Z')).phase,'locked');
+ assert.equal(eventSchedule({...event,gifter_results_published_at:Date.parse('2026-12-25T06:00:00Z')},Date.parse('2026-12-25T06:00:00Z')).phase,'results');
  assert.equal(eventSchedule({event_date:'2026-07-25T18:00:00+09:30'},0).locks_at,'2026-07-24T14:30:00.000Z');
- assert.equal(eventSchedule({event_date:'2026-12-25'},0).reveals_at,'2026-12-25T13:30:00.000Z');
+ assert.equal(eventSchedule({event_date:'2026-12-25'},Date.parse('2026-12-27T00:00:00Z')).phase,'locked');
  assert.equal(eventSchedule({},0).phase,'unavailable');assert.equal(eventSchedule({event_date:'bad-date'},0).phase,'unavailable');
 });
 

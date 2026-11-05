@@ -786,7 +786,7 @@ const isWishlistAdmin = me => !!wishlistAdminEmail && me.email.trim().toLowerCas
 const giftFeatures = installGiftFeatures({ app, db, transporter, fromEmail, requireMeByToken,
   publicBaseUrl, escapeHtml, now: process.env.NODE_ENV === 'test' && process.env.EVENT_TEST_NOW
     ? () => Date.parse(process.env.EVENT_TEST_NOW) : Date.now });
-installGifterGame({ app, db, requireMeByToken, now: giftFeatures.now });
+installGifterGame({ app, db, requireMeByToken, canPublishResults:isWishlistAdmin, now: giftFeatures.now });
 
 const productPreview = createProductPreview();
 const previewRequests = new Map();

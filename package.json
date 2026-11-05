@@ -16,7 +16,9 @@
     "email:connect": "python3 scripts/email-delivery.py connect",
     "email:check": "python3 scripts/email-delivery.py check",
     "start": "node server.js",
-    "dev": "node --watch server.js"
+    "dev": "node --watch server.js",
+    "test:event": "node scripts/test-event.js",
+    "test:event:clean": "node scripts/test-event.js clean"
   },
   "engines": {
     "node": ">=22"

@@ -56,15 +56,19 @@ async function seed(kind,date,label,description){
 
  }
  const recipients=db.prepare('SELECT DISTINCT p.name FROM assignments a JOIN participants p ON p.id=a.recipient_id WHERE a.event_id=? AND a.giver_id=?').all(result.event.id,people[0].id).map(row=>row.name);
+ if(kind==='results'){
+  const published=await fetch(base+'/api/wishlist/guesses/publish',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:people[0].token})});
+  if(!published.ok)throw new Error('Could not publish sample results');
+ }
  return {kind,label,description,people,recipients};
 }
 const server=app.listen(port,'127.0.0.1',async()=>{
  try{
   const today=new Intl.DateTimeFormat('en-CA',{timeZone:'Australia/Adelaide',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
   scenarios=[
-   await seed('open',new Date(Date.now()+7*24*60*60*1000).toISOString(),'Before the event','Try saving and changing guesses, following recipient wishlists and sending a nudge.'),
+   await seed('open',new Date(Date.now()+7*24*60*60*1000).toISOString(),'Before the event','Try saving guesses, then use Alex’s Publish results button whenever you’re ready. You can also follow wishlists and send a nudge.'),
    await seed('locked',today,'Event day · guesses locked','Guesses remain public, editing is locked, and the answers are still hidden.'),
-   await seed('results',new Date(Date.now()-24*60*60*1000).toISOString(),'After the event · leaderboard','See correct answers, scores and the earlier-guess tie-breaker.'),
+   await seed('results',new Date(Date.now()-24*60*60*1000).toISOString(),'Published results · leaderboard','Alex has published this sample event. See correct answers, scores and the earlier-guess tie-breaker.'),
   ];
   console.log(`\nReview ready: ${process.env.BASE_URL}/review`);
   console.log(`Email previews: ${process.env.BASE_URL}/review/emails`);

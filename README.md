@@ -39,10 +39,13 @@ can infer which gifts you are giving. Review this tradeoff before deploying.
 A participant cannot gift to themselves, each giver gives once per tier, and
 gifters for a recipient must differ across tiers when the draw allows it.
 Edits lock at midnight
-at the start of the event day in Adelaide; results appear at the scheduled event
-time. Most correct guesses wins. Ties use the average last-edit time of correct
+at the start of the event day in Adelaide. Results stay hidden until Stephen
+clicks **Publish results** on his wishlist page, regardless of the scheduled time.
+Publishing requires confirmation, reveals all answers, and permanently locks
+guesses even if published early. Only the authenticated admin can publish,
+and only for their own event. Publication survives server restarts. Most correct guesses wins. Ties use the average last-edit time of correct
 guesses, with earlier guesses first; exact ties share a rank. Saving an unchanged
-guess preserves its time. A date-only event reveals results the following midnight.
+guess preserves its time. Date-only events also require manual publication.
 
 Stephen’s invitation (`chen.stephen151@gmail.com`) also grants **edit-only** access
 to existing wishlist items in the same event. Other people retain their usual
@@ -68,6 +71,33 @@ The preview inbox is at http://127.0.0.1:3001/review/emails. The review command 
 its own database under the system temporary directory and never delivers email.
 Each sample event has seven people; Alex is the preview-only wishlist admin.
 Use `REVIEW_PORT=3002 npm run review` if port 3001 is busy.
+
+For a separate manual test with Stephen, Clarisse and Liezel using your three
+inboxes:
+
+```sh
+npm run test:event -- --send-email
+```
+
+This uses the Gmail SMTP settings in `.env`, and creates only
+`.local/manual-test/db.sqlite` and its state files. Open
+http://127.0.0.1:3002/test-event. Everyone starts undrawn; each person has four
+scored guesses with three people and two tiers. Invitation and notification links
+point to this local server, so keep it running and open them on this computer.
+Subsequent starts reuse the test and do not resend invitations automatically.
+Omit `-- --send-email` when creating a fresh test to capture emails instead.
+
+When finished, stop and delete only this marked test:
+
+```sh
+npm run test:event:clean
+```
+
+Cleanup verifies the directory, event and participants before deleting, and stops
+only its own server process. This removes the test database, links and captured
+emails. It leaves the live family event and `.local/event-2026*` files untouched;
+it cannot remove messages already delivered to your inboxes. This local runner,
+like `/review`, is not a production route.
 
 For local development and automated tests:
 

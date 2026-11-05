@@ -9,7 +9,10 @@
   const save=document.getElementById('save-guesses');
   const board=document.getElementById('guesses-board');
   const boardTitle=document.getElementById('guesses-board-title');
-  let state=null,dirty=false,saving=false;
+  const publishControls=document.getElementById('gifter-publish-controls');
+  const publishButton=document.getElementById('publish-results');
+  const publishFeedback=document.getElementById('publish-results-feedback');
+  let state=null,dirty=false,saving=false,publishing=false;
   const money=cents=>new Intl.NumberFormat('en-AU',{style:'currency',currency:'AUD',maximumFractionDigits:0}).format(cents/100);
   const date=(value,precise=false)=>value?new Date(value).toLocaleString('en-AU',{timeZone:state.timezone,dateStyle:'medium',timeStyle:precise?'medium':'short'}):'—';
   function duplicateOptions(){
@@ -27,9 +30,11 @@
     section.classList.toggle('results',results);
     boardTitle.textContent=results?'The great gifter reveal':'Everyone’s guesses';
     status.textContent=data.phase==='unavailable'?'The organiser needs to set the event date before guesses open.'
-      : open?`Who’s gifting to whom? Edits close ${date(data.locks_at)} (${data.timezone}). Results appear ${date(data.reveals_at)}.`
-      : results?'The secret’s out! Most correct guesses wins. Ties go to the earliest average last-edit time of correct guesses.'
-      : `Guesses are locked for the event. The reveal is ${date(data.reveals_at)} (${data.timezone}).`;
+      : open?`Who’s gifting to whom? Edits close ${date(data.locks_at)} (${data.timezone}). Results stay hidden until the organiser publishes them.`
+      : results?`Results published ${date(data.published_at)} (${data.timezone}). Most correct guesses wins. Ties go to the earliest average last-edit time of correct guesses.`
+      : 'Guesses are locked for the event. Waiting for the organiser to publish the results.';
+    publishControls.hidden=!data.can_publish_results || results || data.phase==='unavailable';
+    publishButton.disabled=publishing;
     if(!dirty || !open){
       fields.replaceChildren();dirty=false;
       const own=data.rows.find(row=>row.participant.id===data.me_id);
@@ -115,6 +120,18 @@
       dirty=false;render(data);feedback.textContent='Guesses saved. Everyone can see them on the board.';
     }catch(error){feedback.textContent=error.message;}
     finally{saving=false;save.disabled=state?.phase!=='open';save.textContent=state?.phase==='open'?'Save my guesses':'Guesses locked';}
+  });
+  publishButton.addEventListener('click',async()=>{
+    if(publishing || saving || !state?.can_publish_results || state.phase==='results')return;
+    if(dirty){publishFeedback.textContent='Save or discard your unsaved guesses before publishing.';return;}
+    if(!confirm(`Publish results for ${state.event.name}? This reveals every gifter and permanently locks everyone’s guesses. This cannot be undone.`))return;
+    publishing=true;publishButton.disabled=true;publishButton.textContent='Publishing…';publishFeedback.textContent='';
+    try{
+      const response=await fetch('/api/wishlist/guesses/publish',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token})});
+      const data=await response.json();if(!response.ok)throw new Error(data.error || 'Could not publish results.');
+      dirty=false;render(data);feedback.textContent='Results published. Everyone in this event can see the leaderboard.';
+    }catch(error){publishFeedback.textContent=error.message || 'Could not publish results. Please try again.';}
+    finally{publishing=false;publishButton.disabled=false;publishButton.textContent='Publish results';}
   });
   load();
   setInterval(()=>{if(!document.hidden && !saving)load();},30000);

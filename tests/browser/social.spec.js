@@ -70,8 +70,8 @@ test('recipient bells, anonymous nudges and public editable guesses work togethe
  }finally{for(const context of contexts)await context.close();await server.stop();server.remove();}
 });
 
-test('event-day lock and results leaderboard appear at the correct times',async({page})=>{
- let server=await startServer({now:'2026-12-24T00:00:00Z'});
+test('event-day lock keeps results hidden until the admin publishes',async({page})=>{
+ let server=await startServer({now:'2026-12-24T00:00:00Z',adminEmail:'alex@example.test'});
  try{
   const seeded=await server.seed();await drawAll(server,seeded.people);const person=seeded.people[0];
   const db=new Database(path.join(server.directory,'db.sqlite'),{readonly:true});
@@ -80,13 +80,20 @@ test('event-day lock and results leaderboard appear at the correct times',async(
   const visit=()=>page.goto(`${server.baseUrl}/wishlists?token=${person.token}`);
   await visit();await expect(page.locator('#save-guesses')).toBeEnabled();
   await expect(page.locator('#guesses-board-title')).toHaveText('Everyone’s guesses');
-  const restart=async now=>{const {directory,secret}=server;await server.stop();server=await startServer({directory,secret,now});};
+  const restart=async now=>{const {directory,secret}=server;await server.stop();server=await startServer({directory,secret,now,adminEmail:'alex@example.test'});};
   await restart('2026-12-24T13:30:00Z');await visit();
   await expect(page.locator('#gifter-game-status')).toContainText('Guesses are locked');
   await expect(page.locator('#save-guesses')).toBeDisabled();
   for(const select of await page.locator('.guess-field select').all())await expect(select).toBeDisabled();
   await expect(page.locator('.guess-verdict')).toHaveCount(0);
   await restart('2026-12-25T07:30:00Z');await visit();
+  await expect(page.locator('#guesses-board-title')).toHaveText('Everyone’s guesses');
+  await expect(page.locator('.guess-verdict')).toHaveCount(0);
+  page.once('dialog',dialog=>dialog.dismiss());
+  await page.getByRole('button',{name:'Publish results',exact:true}).click();
+  await expect(page.locator('.guess-verdict')).toHaveCount(0);
+  page.once('dialog',dialog=>dialog.accept());
+  await page.getByRole('button',{name:'Publish results',exact:true}).click();
   await expect(page.locator('#guesses-board-title')).toHaveText('The great gifter reveal');
   await expect(page.locator('#save-guesses')).toBeDisabled();
   const first=page.locator('.guess-card').first();await expect(first).toContainText(person.name);
