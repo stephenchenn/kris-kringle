@@ -9,9 +9,14 @@ const filename=path.join(directory,'state.json');
 const kind='kris-kringle-isolated-manual-test';
 const participants=[
  {name:'Stephen',email:'chen.stephen151@gmail.com'},
+ {name:'Stephen1',email:'chen.stephen151+kk-test-stephen1@gmail.com'},
  {name:'Clarisse',email:'chen.stephen141@gmail.com'},
+ {name:'Clarisse1',email:'chen.stephen141+kk-test-clarisse1@gmail.com'},
  {name:'Liezel',email:'stephen.chen@cognitive.earth'},
+ {name:'Liezel1',email:'chen.stephen151+kk-test-liezel1@gmail.com'},
 ];
+const eventName=`TEST ONLY — Kris Kringle (${participants.length} participants)`;
+const guessCount=(participants.length-1)*2;
 const command=process.argv[2];
 if(command && !['clean','--send-email'].includes(command))throw new Error('Use npm run test:event [-- --send-email], or npm run test:event:clean.');
 const escape=value=>String(value).replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
@@ -29,7 +34,7 @@ function checkDatabase(state){
   const tables=check.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='events'").all();
   if(!tables.length)return;
   const events=check.prepare('SELECT id,name FROM events').all();
-  if(events.some(event=>event.name!=='TEST ONLY — Kris Kringle (3 participants)' || (state.eventId && event.id!==state.eventId)) || events.length>1)throw new Error('Unexpected event in test database. Refusing to use or delete it.');
+  if(events.some(event=>event.name!==eventName || (state.eventId && event.id!==state.eventId)) || events.length>1)throw new Error('Unexpected event in test database. Refusing to use or delete it.');
   if(events.length){
    const people=check.prepare('SELECT name,email FROM participants ORDER BY name').all();
    if(JSON.stringify(people)!==JSON.stringify([...participants].sort((a,b)=>a.name.localeCompare(b.name))))throw new Error('Unexpected participants in test database. Refusing to use or delete it.');
@@ -75,7 +80,7 @@ async function start(){
  let invites=[];
  app.get('/test-event',(_req,res)=>{
   const drawn=db.prepare('SELECT name,has_drawn FROM participants').all();
-  res.send(`<!doctype html><html lang="en-AU"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Isolated three-person test</title><link rel="stylesheet" href="/theme.css"><style>main{max-width:850px;margin:auto;padding:30px 20px}article{padding:20px;border:1px solid var(--line);background:var(--surface);border-radius:12px;margin:20px 0}p{line-height:1.8}nav{display:flex;gap:20px;flex-wrap:wrap}</style><main><p>LOCAL TEST ONLY · SEPARATE DATABASE</p><h1>Your three-person test</h1><p>Draw your recipients, add wishlist items, try bells and nudges, and make four guesses each. Stephen can edit existing items and publish results. Publishing is permanent for this test; create a fresh test to start again.</p><p>${state.emailMode==='smtp'?'Emails are sent to the three inboxes below. Links open this local server; keep it running.':'Emails are captured locally. No messages are delivered.'}</p>${invites.map(person=>`<article><h2>${escape(person.name)}${person.name==='Stephen'?' · admin':''}</h2><p>${escape(person.email)} · ${drawn.find(row=>row.name===person.name)?.has_drawn?'Drawn':'Not drawn yet'}</p><nav><a href="${escape(person.link)}">Open invitation / draw</a><a href="/wishlists?token=${encodeURIComponent(new URL(person.link).searchParams.get('token'))}">Open wishlist</a></nav></article>`).join('')}<p>When finished: <code>npm run test:event:clean</code>. This deletes only this isolated test and its saved data. It cannot recall emails already delivered.</p></main>`);
+  res.send(`<!doctype html><html lang="en-AU"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Isolated ${participants.length}-person test</title><link rel="stylesheet" href="/theme.css"><style>main{max-width:850px;margin:auto;padding:30px 20px}article{padding:20px;border:1px solid var(--line);background:var(--surface);border-radius:12px;margin:20px 0}p{line-height:1.8}nav{display:flex;gap:20px;flex-wrap:wrap}</style><main><p>LOCAL TEST ONLY · SEPARATE DATABASE</p><h1>Your ${participants.length}-person test</h1><p>Draw your recipients, add wishlist items, try bells and nudges, and make ${guessCount} guesses each. Stephen can edit existing items and publish results. Publishing is permanent for this test; create a fresh test to start again.</p><p>${state.emailMode==='smtp'?'Emails are sent to your existing inboxes below. Gmail +aliases give the duplicate participants separate identities. Links open this local server; keep it running.':'Emails are captured locally. No messages are delivered.'}</p>${invites.map(person=>`<article><h2>${escape(person.name)}${person.name==='Stephen'?' · admin':''}</h2><p>${escape(person.email)} · ${drawn.find(row=>row.name===person.name)?.has_drawn?'Drawn':'Not drawn yet'}</p><nav><a href="${escape(person.link)}">Open invitation / draw</a><a href="/wishlists?token=${encodeURIComponent(new URL(person.link).searchParams.get('token'))}">Open wishlist</a></nav></article>`).join('')}<p>When finished: <code>npm run test:event:clean</code>. This deletes only this isolated test and its saved data. It cannot recall emails already delivered.</p></main>`);
  });
  const server=app.listen(port,'127.0.0.1',async()=>{
   try{
@@ -87,7 +92,7 @@ async function start(){
     state.eventId=existing[0].id;
     invites=db.prepare('SELECT name,email,invite_token FROM participants ORDER BY name').all().map(person=>({name:person.name,email:person.email,link:`${base}/draw?token=${encodeURIComponent(person.invite_token)}`}));
    }else{
-    const result=await request('/api/admin/seed',{secret:state.secret,eventName:'TEST ONLY — Kris Kringle (3 participants)',eventDate:'2026-12-25T18:00:00+10:30',location:'Isolated local test',participants,
+    const result=await request('/api/admin/seed',{secret:state.secret,eventName,eventDate:'2026-12-25T18:00:00+10:30',location:'Isolated local test',participants,
      tiers:[{name:'BIG GIFT',budgetCents:5000},{name:'small gift',budgetCents:2000}]});
     state.eventId=result.event.id;invites=result.invites;
    }

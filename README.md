@@ -78,8 +78,8 @@ its own database under the system temporary directory and never delivers email.
 Each sample event has seven people; Alex is the preview-only wishlist admin.
 Use `REVIEW_PORT=3002 npm run review` if port 3001 is busy.
 
-For a separate manual test with Stephen, Clarisse and Liezel using your three
-inboxes:
+For a separate manual test with six participants—Stephen, Stephen1, Clarisse,
+Clarisse1, Liezel and Liezel1—using your existing three inboxes:
 
 ```sh
 npm run test:event -- --send-email
@@ -87,8 +87,10 @@ npm run test:event -- --send-email
 
 This uses the Gmail SMTP settings in `.env`, and creates only
 `.local/manual-test/db.sqlite` and its state files. Open
-http://127.0.0.1:3002/test-event. Everyone starts undrawn; each person has four
-scored guesses with three people and two tiers. Invitation and notification links
+http://127.0.0.1:3002/test-event. Everyone starts undrawn; each person has ten
+scored guesses with six people and two tiers. The duplicate accounts use Gmail
+`+` aliases; Liezel1’s alias goes to the 151 inbox. Only the original Stephen
+account has admin access. Invitation and notification links
 point to this local server, so keep it running and open them on this computer.
 Subsequent starts reuse the test and do not resend invitations automatically.
 Omit `-- --send-email` when creating a fresh test to capture emails instead.
