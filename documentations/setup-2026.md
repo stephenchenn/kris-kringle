@@ -191,11 +191,15 @@ item to check the opt-out. Only assigned gifters have these controls. Enabling
 updates displays advice about Spam and marking messages as **Not spam**.
 
 Send a nudge and inspect its email: the recipient sees an anonymous request and
-their own wishlist link. All gifters share the same recipient's 24-hour cooldown.
+their own wishlist link. You can include an anonymous message of up to 500
+characters; avoid details that reveal your identity. All gifters share a limit
+of two nudges per recipient in a rolling 24 hours, including queued requests.
 Messages are kept in a durable queue, retry temporary delivery failures up to
-five times, and survive restarts. New-item notifications are separate from edits
-and reservations; queued notifications are cancelled if the recipient's gifter
-has disabled updates before delivery.
+five times, and survive restarts. New-item notifications are separate from edits;
+queued new-item notifications are cancelled if the gifter has disabled updates
+before delivery. Reservation alerts work independently of the bell: only the
+reserver is emailed when their reserved item is deleted, and only the other
+drawn gifters are emailed when an item is reserved. No other gifter is identified.
 
 Each tier has one public gifter guess. Users can save partial guesses, change or
 clear them, and see other participants' current guesses. Guesses must name
@@ -205,12 +209,27 @@ guess; unchanged saves preserve its original time.
 
 Event timing uses `events.event_timezone`, which defaults to
 `Australia/Adelaide`. Guess editing stops at midnight at the start of the event
-day. The public board reveals actual gifters and ranks players at the event's
-scheduled timestamp. Date-only events reveal at midnight after that day. Missing
+day. The public board reveals actual gifters and ranks players only when Stephen
+clicks **Publish results**, including for date-only events. Missing
 or invalid dates keep guessing closed. Results sort by correct tier count, then
 the average last-edit timestamp of correct guesses, earliest first. Exact ties
 share a rank. Before the reveal, responses contain no answers or correctness
 flags. These rules also apply to direct API requests.
+
+### Web event administration
+
+Open `/admin` on the local or production server and use `ADMIN_SECRET` to sign
+in. The web interface creates events without sending invitations, then lets you
+confirm a selected set of recipients before emailing them. It records successful
+SMTP acceptance and shows who has drawn. Existing sent emails cannot be changed;
+editing event details or tier budgets updates the website. The participant list
+and number of tiers remain fixed so that allocations are preserved.
+
+Admin sessions use an HttpOnly, SameSite=Strict cookie (Secure on HTTPS), expire
+after eight hours and require CSRF validation on writes. The secret is not
+returned to the browser or persisted in browser storage. Sign-in attempts are
+rate-limited. Sessions are intentionally cleared by server restarts. The existing
+CLI commands continue to use the admin secret directly.
 
 Automated coverage includes opt-in/out, recipient permissions, email content and
 personal-link privacy, competing reminders, exact cooldown boundaries, retry

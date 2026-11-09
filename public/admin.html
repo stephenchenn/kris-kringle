@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en-AU">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>Event admin · Kris Kringle</title><link rel="stylesheet" href="/theme.css"><link rel="stylesheet" href="/admin.css"><script src="/admin.js" defer></script></head>
+<body><div class="page-shell">
+  <header class="site-header"><a class="brand" href="/admin"><span aria-hidden="true">🎁</span><span>Kris Kringle<span class="brand-caption">A LITTLE PLANNING, A HAPPY SURPRISE</span></span></a><button id="sign-out" class="secondary" type="button" hidden>Sign out</button></header>
+  <main>
+    <section class="admin-intro"><p class="eyebrow">BEHIND THE MAGIC</p><h1>Bring everyone together.</h1><p>Create an event, set the gift budgets and invite your people.</p></section>
+    <p id="admin-feedback" role="status" aria-live="polite"></p>
+    <section id="login-panel" class="admin-card">
+      <h2>Admin sign in</h2><p>Use the existing admin secret to manage events.</p>
+      <form id="login-form"><label for="admin-secret">Admin secret</label><input id="admin-secret" type="password" autocomplete="current-password" required><button type="submit">Sign in</button></form>
+    </section>
+    <div id="admin-console" hidden>
+      <div class="admin-layout">
+        <aside class="admin-card"><div class="card-heading"><h2>Your events</h2><button id="new-event" class="secondary" type="button">New event</button></div><div id="event-list" class="event-list"></div></aside>
+        <div>
+          <section id="create-panel" class="admin-card" aria-labelledby="create-title">
+            <p class="eyebrow">START SOMETHING LOVELY</p><h2 id="create-title">Create an event</h2><p>Review the details first. Invitations are sent separately after creation.</p>
+            <form id="create-form">
+              <label for="event-name">Event name</label><input id="event-name" maxlength="150" placeholder="Our family Kris Kringle" required>
+              <div class="form-grid"><div><label for="event-date">Event day · Adelaide</label><input id="event-date" type="date" required></div><div><label for="event-location">Location</label><input id="event-location" maxlength="500" placeholder="Where are we celebrating?"></div></div>
+              <fieldset><legend>Gift tiers</legend><p>Everyone gives and receives one gift at each budget.</p><div id="create-tiers" class="form-rows"></div><button id="add-tier" class="secondary" type="button">Add gift tier</button></fieldset>
+              <fieldset><legend>Participants</legend><p>Use a different email address for each person.</p><div id="create-people" class="form-rows"></div><button id="add-person" class="secondary" type="button">Add participant</button></fieldset>
+              <button id="create-event" type="submit">Create event</button>
+            </form>
+          </section>
+          <section id="event-panel" class="admin-card" hidden aria-labelledby="selected-event-title">
+            <p class="eyebrow">THE GET-TOGETHER</p><h2 id="selected-event-title"></h2><p id="event-progress"></p>
+            <form id="edit-event-form">
+              <label for="edit-event-name">Event name</label><input id="edit-event-name" maxlength="150" required>
+              <div class="form-grid"><div><label for="edit-event-date">Event day · Adelaide</label><input id="edit-event-date" type="date" required></div><div><label for="edit-event-location">Location</label><input id="edit-event-location" maxlength="500"></div></div>
+              <fieldset><legend>Gift tiers</legend><div id="edit-tiers" class="form-rows"></div></fieldset>
+              <p class="small-note">Participant lists and the number of tiers stay fixed after creation to preserve the draw. Changing a budget updates the wishlist pages; earlier emails keep their original details.</p>
+              <button type="submit">Save event details</button>
+            </form>
+            <section class="invitation-panel" aria-labelledby="invite-title"><h3 id="invite-title">Invitations &amp; draw progress</h3><p>Only participants you select will receive an invitation. Already invited or drawn participants start unselected.</p>
+              <div class="selection-actions"><button id="select-uninvited" class="secondary" type="button">Select waiting, not yet invited</button><button id="clear-selection" class="secondary" type="button">Clear selection</button><button id="refresh-event" class="secondary" type="button">Refresh status</button></div>
+              <div id="event-participants" class="participant-list"></div>
+              <button id="send-invitations" type="button">Send selected invitations</button><p id="invite-feedback" role="status" aria-live="polite"></p>
+            </section>
+          </section>
+        </div>
+      </div>
+    </div>
+  </main><footer class="site-footer"><span>A few details. A little magic.</span><span>Event admin</span></footer>
+</div></body></html>

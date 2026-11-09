@@ -38,6 +38,7 @@
                 <div class="guide-content">
                     <p><strong>Keep your invite link to yourself.</strong> It gives access to your wishlist and recipients.</p>
                     <p><strong>Reserve thoughtfully.</strong> Only reserve gifts you intend to buy. The recipient can’t see reservations; their gift givers can, so there are no accidental doubles.</p>
+                    <p><strong>A helpful heads-up.</strong> We’ll email you if an item you reserved is removed, or if another gifter reserves an idea for one of your recipients.</p>
                     <p><strong>Give them options.</strong> Add a few ideas at different prices. You can add more items than the number of gifts you’re receiving.</p>
                 </div>
             </details>
@@ -75,7 +76,7 @@
             </section>
             <p id="msg_add" class="muted feedback" role="status" aria-live="polite"></p>
             <div id="notice" class="muted" role="status" aria-live="polite"></div>
-            <p id="wishlist-admin-note" class="game-copy" hidden>You have wishlist edit access. You can correct existing items on anyone’s list.</p>
+            <p id="wishlist-admin-note" class="game-copy" hidden>You have wishlist edit access. You can correct existing items on anyone’s list. <a href="/admin">Manage events</a></p>
             <div id="root" class="grid"></div>
             <section id="gifter-game" class="game-section" aria-labelledby="gifter-game-title" hidden>
                 <div class="section-heading"><div><p class="eyebrow">WHO’S BEHIND THE SURPRISE?</p><h2 id="gifter-game-title">Guess the gifters</h2></div><span class="game-sparkle" aria-hidden="true">✧</span></div>
@@ -105,7 +106,7 @@
         <footer class="site-footer"><span>A few hints. A happy surprise.</span><span>Made for giving <span aria-hidden="true">✧</span></span></footer>
     </div>
 
-    <script src="/product-preview.js" defer></script>
+    <script src="/product-preview.js"></script>
     <script src="/wishlist-social.js"></script>
     <dialog id="guess-picker" class="guess-picker" aria-labelledby="guess-picker-title" aria-describedby="guess-picker-context">
         <div class="guess-picker-handle" aria-hidden="true"></div>
@@ -554,6 +555,14 @@
                             const inNotesE = document.createElement('textarea'); inNotesE.className = 'input'; inNotesE.rows = 2; inNotesE.placeholder = 'Notes'; inNotesE.value = it.notes || '';
 
                             const actions = document.createElement('div'); actions.className = 'edit-actions';
+                            const autofillBtn=document.createElement('button');autofillBtn.type='button';autofillBtn.className='btn-lite';autofillBtn.textContent='Autofill details';
+                            const lookupStatus=document.createElement('div');lookupStatus.className='lookup-status';lookupStatus.setAttribute('role','status');lookupStatus.setAttribute('aria-live','polite');
+                            const lookupDots=document.createElement('span');lookupDots.className='lookup-dots';lookupDots.setAttribute('aria-hidden','true');lookupDots.hidden=true;
+                            for(let i=0;i<3;i++)lookupDots.appendChild(document.createElement('span'));
+                            const lookupCopy=document.createElement('div');
+                            const lookupHeading=document.createElement('strong');lookupHeading.className='lookup-title';lookupHeading.hidden=true;
+                            const lookupMessage=document.createElement('p');lookupCopy.append(lookupHeading,lookupMessage);lookupStatus.append(lookupDots,lookupCopy);
+                            const lookupImage=document.createElement('img');lookupImage.className='edit-image-preview';lookupImage.referrerPolicy='no-referrer';lookupImage.hidden=true;
                             const saveBtn = document.createElement('button'); saveBtn.className = 'btn-primary'; saveBtn.textContent = 'Update';
                             const cancelBtn = document.createElement('button'); cancelBtn.className = 'btn-lite'; cancelBtn.textContent = 'Cancel';
                             const msg = document.createElement('span'); msg.className = 'muted';
@@ -564,16 +573,21 @@
                             editForm.append(
                                 makeField(`edt_title_${it.id}`, 'Title *', inTitleE),
                                 makeField(`edt_url_${it.id}`, 'Product link', inUrlE),
+                                autofillBtn,lookupStatus,lookupImage,
                                 makeField(`edt_img_${it.id}`, 'Image URL', inImgE),
                                 makeField(`edt_price_${it.id}`, 'Gift Price', inPriceE),
                                 makeField(`edt_notes_${it.id}`, 'Notes', inNotesE),
                                 actions
                             );
                             box.appendChild(editForm);
+                            const preview=window.createWishlistProductPreview({urlInput:inUrlE,button:autofillBtn,status:lookupStatus,
+                                message:lookupMessage,heading:lookupHeading,dots:lookupDots,preview:lookupImage,
+                                fields:{title:inTitleE,image_url:inImgE,price_cents:inPriceE},editing:true});
 
 
                             // Toggle edit form
                             edit.onclick = () => {
+                                preview.stop();
                                 editForm.style.display = (editForm.style.display === 'none') ? 'block' : 'none';
                             };
 
@@ -587,6 +601,7 @@
 
                             // Save update
                             saveBtn.onclick = async () => {
+                                preview.stop();
                                 msg.textContent = '';
                                 if (!inTitleE.value.trim()) { msg.textContent = 'Title required'; return; }
                                 try {
@@ -606,7 +621,7 @@
                                 }
                             };
 
-                            cancelBtn.onclick = () => { editForm.style.display = 'none'; };
+                            cancelBtn.onclick = () => { preview.stop();editForm.style.display = 'none'; };
                         }
 
                         // Display content

@@ -4,6 +4,21 @@ Use the free Render hostname: https://kris-kringle.onrender.com.
 See [the 2026 setup guide](documentations/setup-2026.md) for hosting,
 free email setup, backups, and creating this year's event.
 
+For the web event manager, open **https://kris-kringle.onrender.com/admin** and
+sign in with the existing `ADMIN_SECRET` from Render's environment settings
+(or your private local `.env`). This is separate from wishlist edit access.
+The password is not stored in browser storage; the HttpOnly session lasts eight
+hours and ends on sign-out or a server restart.
+
+Create an event with its name, Adelaide event day, location, participants and
+gift budgets. Creation does not send mail: review the selected participants,
+then click **Send selected invitations** and confirm. You can refresh draw
+progress, open personal links and resend to selected people. Participants with
+a recorded invitation or a completed draw start unselected. Existing events
+also appear here. You can edit event details and tier budgets while preserving
+assignments, wishlist items and reservations. Participant lists and tier counts
+are fixed once an event is created.
+
 Edit your private `.local/event-2026.json`, then create the event and email its
 invitations with one command:
 
@@ -24,11 +39,22 @@ npm run event:wishlists  # Send wishlist reminder emails
 
 In **Add an item**, paste a product link to fill its name, image and price
 automatically. You can edit the details or enter them yourself if a shop blocks
-the lookup.
+the lookup. When editing an existing item, **Autofill details** explicitly refreshes
+its name, image and AUD price. Changes typed while a lookup is running are kept;
+the item is only saved when you click **Update**.
 
 Recipient wishlist cards have a notification bell and **Send a nudge**. Email
 updates are opt-in for each recipient and include new item details. Nudges are
-anonymous and limited to one per recipient every 24 hours, shared by all gifters.
+anonymous and limited to **two per recipient in a rolling 24 hours**, shared by
+all gifters. Add an optional anonymous message (up to 500 characters); the dialog
+reminds you not to reveal yourself. Pending requests count toward the limit.
+
+Reservation alerts are separate from the new-item bell: deleting a reserved
+item emails its reserver; reserving an item emails the other drawn gifters for
+that recipient with a “Reserve soon!” heads-up. Owners and unrelated people are
+never notified, and emails never identify the other gifter. Repeated clicks on
+an existing reservation do not send another email. These messages use the same
+durable, retrying email queue.
 
 **Guess the gifters** lets each participant guess who is giving to every recipient,
 for each tier. Gifts you are giving are already known and cannot be guessed or

@@ -220,3 +220,12 @@ html.guess-picker-open, html.guess-picker-open body { overflow: hidden; }
     #save-guesses { width: 100%; }
     .guesses-board { grid-template-columns: 1fr; }
 }
+/* Inline edits and anonymous nudges share the wishlist form styling. */
+.edit-image-preview { max-width:160px;max-height:140px;object-fit:contain;margin:12px 0; }
+.nudge-dialog { width:min(480px,calc(100% - 32px));max-height:85dvh;overflow:auto;border:1px solid var(--line);border-radius:18px;padding:25px;background:var(--surface);color:var(--ink); }
+.nudge-dialog::backdrop { background:rgba(20,40,30,.4); }
+.nudge-dialog form { display:grid;gap:16px; }
+.nudge-dialog h2 { font:400 28px Georgia,serif; }
+.nudge-dialog p { line-height:1.65; }
+.nudge-dialog label { font-weight:600; }
+.nudge-dialog-actions { display:flex;justify-content:flex-end;gap:12px;flex-wrap:wrap; }

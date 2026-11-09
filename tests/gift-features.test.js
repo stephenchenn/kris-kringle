@@ -60,7 +60,7 @@ test('notification subscriptions are recipient-specific, private, persistent and
  await add('After restart');await until(()=>notices().length===4);
 });
 
-test('reminders are anonymous and shared by all gifters, with one accepted request every 24 hours',async t=>{
+test('two anonymous nudges per recipient share a rolling 24-hour quota across gifters and restarts',async t=>{
  const start='2026-11-10T00:00:00Z';
  let server=await startServer({now:start});t.after(async()=>{await server.stop();server.remove();});
  const {people}=await server.seed();const owner=people[0];await drawPeople(server,people,owner);
@@ -69,9 +69,10 @@ test('reminders are anonymous and shared by all gifters, with one accepted reque
  assert.equal((await reminder(server,outsider,owner)).status,403);
  assert.equal((await reminder(server,owner,owner)).status,403,'undrawn participants cannot send reminders');
  const race=await Promise.all(givers.map(person=>reminder(server,person,owner)));
- assert.deepEqual(race.map(r=>r.status).sort(),[202,429]);
+ assert.deepEqual(race.map(r=>r.status).sort(),[202,202]);
+ assert.equal((await reminder(server,givers[0],owner)).status,429);
  const notices=()=>server.emails().filter(mail=>mail.subject.startsWith('A little wishlist nudge'));
- await until(()=>notices().length===1);
+ await until(()=>notices().length===2);
  const mail=notices()[0];assert.equal(mail.to[0].address,owner.email);
  assert(mail.text.includes(`/wishlists?token=${owner.token}`));
  for(const giver of givers){assert(!mail.text.includes(giver.name));assert(!mail.text.includes(giver.token));}
@@ -81,7 +82,26 @@ test('reminders are anonymous and shared by all gifters, with one accepted reque
  const early=await reminder(server,givers[1],owner);assert.equal(early.status,429);assert.equal(early.headers.get('retry-after'),'1');
  await restart('2026-11-11T00:00:00Z');
  assert.equal((await reminder(server,givers[1],owner)).status,202);
- await until(()=>notices().length===2);
+ await until(()=>notices().length===3);
+});
+
+test('nudge messages are optional, validated, escaped and never include the requesting gifter',async t=>{
+ const server=await startServer();t.after(async()=>{await server.stop();server.remove();});
+ const {people}=await server.seed();await drawPeople(server,people);const owner=people[0];
+ const giver=people.find(p=>p.recipients.some(r=>r.recipient===owner.name));
+ const send=message=>server.request('POST',`/api/wishlist/recipients/${owner.id}/remind`,{token:giver.token,message});
+ for(const message of [42,{},'x'.repeat(501)])assert.equal((await send(message)).status,400);
+ assert.equal((await settings(server,giver)).data.recipient_settings[owner.id].reminders_remaining,2);
+ const note='Please add a few ideas! <script>alert(1)</script>\nDifferent price ranges would help.';
+ assert.equal((await send(note)).status,202);
+ const notices=()=>server.emails().filter(mail=>mail.subject.startsWith('A little wishlist nudge'));
+ await until(()=>notices().length===1);const mail=notices()[0];
+ assert(mail.text.includes(note));assert(mail.html.includes('&lt;script&gt;'));assert(!mail.html.includes('<script>'));
+ assert(!JSON.stringify(mail).includes(giver.token));assert(!mail.text.includes(giver.name));
+ assert.equal((await settings(server,giver)).data.recipient_settings[owner.id].reminders_remaining,1);
+ assert.equal((await reminder(server,giver,owner)).status,202);await until(()=>notices().length===2);
+ assert(!notices()[1].text.includes('Their anonymous message'));
+ assert.equal((await settings(server,giver)).data.recipient_settings[owner.id].reminders_remaining,0);
 });
 
 test('email jobs survive restart, retry failures and respect disabling pending notifications',async t=>{

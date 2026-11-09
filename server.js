@@ -9,6 +9,7 @@ const { createProductPreview } = require('./lib/product-preview');
 const { PreviewError } = require('./lib/public-page');
 const { installGiftFeatures } = require('./lib/gift-features');
 const { installGifterGame } = require('./lib/gifter-game');
+const { installAdmin } = require('./lib/admin');
 
 if (!process.env.ADMIN_SECRET) {
   throw new Error('Set ADMIN_SECRET before starting the server');
@@ -265,6 +266,11 @@ function publicBaseUrl() {
   return url.origin;
 }
 
+if(!db.prepare('PRAGMA table_info(participants)').all().some(column=>column.name==='invitation_sent_at')) {
+  db.exec('ALTER TABLE participants ADD COLUMN invitation_sent_at TEXT');
+}
+installAdmin({app,db,publicBaseUrl,createEvent:seedEvent});
+
 
 
 // --- API: who am I + recipients ---
@@ -417,7 +423,7 @@ app.post('/api/admin/assignments', (req, res) => {
 // server.js (replace your /api/admin/seed endpoint)
 
 
-app.post("/api/admin/seed", (req, res) => {
+function seedEvent(req, res) {
   const {
     secret,
     eventName,
@@ -515,6 +521,8 @@ app.post("/api/admin/seed", (req, res) => {
     for (const assignment of seedAssignments(pRows, tierDefs)) {
       insertAssignment.run(randomUUID(), eventId, assignment.tier_id, assignment.giver_id, assignment.recipient_id);
     }
+    if(req.adminCreation)db.prepare('INSERT INTO admin_event_requests(request_key,config_hash,event_id) VALUES(?,?,?)')
+      .run(req.adminCreation.requestKey,req.adminCreation.configHash,eventId);
 
     return pRows;
   });
@@ -542,9 +550,11 @@ app.post("/api/admin/seed", (req, res) => {
       link: `${base}/draw?token=${r.token}`,
     })),
   });
-});
+}
+app.post('/api/admin/seed',seedEvent);
 
 
+const invitationSends=new Set();
 app.post("/api/admin/send-invites", async (req, res) => {
   const { secret, eventId } = req.body || {};
   if (secret !== process.env.ADMIN_SECRET)
@@ -563,11 +573,19 @@ app.post("/api/admin/send-invites", async (req, res) => {
     .get(evt);
   if (!eventRow) return res.status(404).json({ error: 'No event found' });
   const base = publicBaseUrl();
-  const people = db
+  let people = db
     .prepare(
-      `SELECT name, email, invite_token FROM participants WHERE event_id = ?`
+      `SELECT id, name, email, invite_token FROM participants WHERE event_id = ?`
     )
     .all(evt);
+  if(req.body.participantIds!==undefined){
+    const ids=req.body.participantIds;
+    if(!Array.isArray(ids)||!ids.length||new Set(ids).size!==ids.length||ids.some(id=>!people.some(p=>p.id===id)))return res.status(400).json({error:'Choose participants from this event.'});
+    people=people.filter(p=>ids.includes(p.id));
+  }
+  if(invitationSends.has(evt))return res.status(409).json({error:'Invitations are already being sent for this event. Please wait.'});
+  invitationSends.add(evt);
+  try {
 
   const send = (to, subject, html, text) =>
     transporter.sendMail({ from: fromEmail, to, subject, html, text });
@@ -599,6 +617,7 @@ app.post("/api/admin/send-invites", async (req, res) => {
     try {
       // eslint-disable-next-line no-await-in-loop
       await send(p.email, `You're invited: ${eventRow.name}`, html, text);
+      db.prepare('UPDATE participants SET invitation_sent_at=? WHERE id=?').run(new Date().toISOString(),p.id);
       sent++;
     } catch (e) {
       failed.push({ email: p.email, error: e.message });
@@ -606,6 +625,7 @@ app.post("/api/admin/send-invites", async (req, res) => {
   }
 
   res.json({ ok: true, sent, failed });
+  } finally {invitationSends.delete(evt);}
 });
 
 app.post("/api/admin/send-wishlists", async (req, res) => {
@@ -906,7 +926,7 @@ app.delete('/api/wishlist/item/:id', (req, res) => {
   if (!me) return res.status(401).json({ error: 'invalid token' });
 
   const row = db.prepare(`
-    SELECT wi.id, wl.owner_id
+    SELECT wi.*, wl.owner_id, wl.event_id
     FROM wishlist_items wi
     JOIN wishlists wl ON wl.id = wi.wishlist_id
     WHERE wi.id = ?
@@ -914,7 +934,10 @@ app.delete('/api/wishlist/item/:id', (req, res) => {
   if (!row) return res.status(404).json({ error: 'not found' });
   if (row.owner_id !== me.pid) return res.status(403).json({ error: 'forbidden' });
 
-  db.prepare(`DELETE FROM wishlist_items WHERE id=?`).run(id);
+  db.transaction(()=>{
+    giftFeatures.enqueueReservedDeletion(row.owner_id,row.event_id,row);
+    db.prepare(`DELETE FROM wishlist_items WHERE id=?`).run(id);
+  })();
   res.json({ ok: true });
 });
 
@@ -927,7 +950,7 @@ app.post('/api/wishlist/item/:id/reserve', (req, res) => {
 
   // Load item + wishlist owner + event
   const row = db.prepare(`
-    SELECT wi.id, wi.reserved_by, wl.owner_id, wl.event_id
+    SELECT wi.*, wl.owner_id, wl.event_id
     FROM wishlist_items wi
     JOIN wishlists wl ON wl.id = wi.wishlist_id
     WHERE wi.id = ?
@@ -947,8 +970,10 @@ app.post('/api/wishlist/item/:id/reserve', (req, res) => {
     return res.status(409).json({ error: 'already reserved' });
   }
 
-  db.prepare(`UPDATE wishlist_items SET reserved_by=? WHERE id=?`)
-    .run(me.pid, id);
+  db.transaction(()=>{
+    const changed=db.prepare(`UPDATE wishlist_items SET reserved_by=? WHERE id=? AND reserved_by IS NULL`).run(me.pid,id);
+    if(changed.changes)giftFeatures.enqueueReservation(row.owner_id,row.event_id,row,me.pid);
+  })();
   res.json({ ok: true });
 });
 

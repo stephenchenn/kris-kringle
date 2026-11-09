@@ -147,3 +147,33 @@ test('blocked shops leave manual entry available and foreign prices are clearly 
     await expect(page.locator('#f_price')).toHaveValue('');
   } finally { await server.stop(); server.remove(); }
 });
+
+test('editing can explicitly autofill existing details, keeps in-flight edits, and saves only on Update',async({page})=>{
+ const {server,person}=await openForm(page);
+ try{
+  const item=(await server.request('POST','/api/wishlist/item',{token:person.token,title:'Old name',url:'https://shop.example.test/tee',price_cents:1000})).data.item;
+  await page.reload();const card=page.locator('#root>.card').filter({has:page.locator('.owner',{hasText:person.name})});
+  await card.locator('.btn-toggle').click();await card.getByRole('button',{name:'Edit',exact:true}).click();
+  let release,started;const gate=new Promise(resolve=>{release=resolve;}),pending=new Promise(resolve=>{started=resolve;});
+  await page.route('**/api/wishlist/preview',async route=>{started();await gate;await route.fulfill({json:{product}}).catch(()=>{});});
+  await card.getByRole('button',{name:'Autofill details',exact:true}).click();await pending;
+  await expect(card.locator('.edit-row .lookup-status')).toContainText('Finding product details');
+  await card.getByLabel('Title *',{exact:true}).fill('My preferred name');release();
+  await expect(card.getByLabel('Gift Price',{exact:true})).toHaveValue('24.95');
+  await expect(card.getByLabel('Image URL',{exact:true})).toHaveValue(product.image_url);
+  await expect(card.getByLabel('Title *',{exact:true})).toHaveValue('My preferred name');
+  const before=(await server.request('GET',`/api/wishlist/me?token=${person.token}`)).data.items.find(row=>row.id===item.id);
+  expect(before.title).toBe('Old name');expect(before.price_cents).toBe(1000);
+  await card.getByRole('button',{name:'Update',exact:true}).click();await expect(card).toContainText('My preferred name');
+  const after=(await server.request('GET',`/api/wishlist/me?token=${person.token}`)).data.items.find(row=>row.id===item.id);
+  expect(after).toMatchObject({title:'My preferred name',price_cents:2495,image_url:product.image_url});
+  await card.getByRole('button',{name:'Edit',exact:true}).click();
+  await page.unroute('**/api/wishlist/preview');
+  await page.route('**/api/wishlist/preview',route=>route.fulfill({status:422,json:{error:'This shop blocks automatic lookups. Enter details manually.'}}));
+  await card.getByRole('button',{name:'Autofill details',exact:true}).click();
+  await expect(card.locator('.edit-row .lookup-status')).toContainText('blocks automatic lookups');
+  await expect(card.getByLabel('Title *',{exact:true})).toHaveValue('My preferred name');
+  await expect(card.getByRole('button',{name:'Update',exact:true})).toBeEnabled();
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);
+ }finally{await server.stop();server.remove();}
+});

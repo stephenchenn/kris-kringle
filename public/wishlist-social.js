@@ -8,6 +8,20 @@
       const nudge=document.createElement('button');nudge.type='button';nudge.className='recipient-nudge';
       const feedback=document.createElement('p');feedback.className='recipient-action-feedback';feedback.setAttribute('role','status');feedback.setAttribute('aria-live','polite');
       const hint=document.createElement('p');hint.className='recipient-action-hint';
+      const dialog=document.createElement('dialog');dialog.className='nudge-dialog';
+      const form=document.createElement('form');
+      const title=document.createElement('h2');title.textContent=`Nudge ${owner.name}`;
+      title.id=`nudge-title-${owner.id}`;dialog.setAttribute('aria-labelledby',title.id);
+      const privacy=document.createElement('p');privacy.textContent='Keep the surprise! Don’t reveal your name or clues that identify you. Your message will be sent anonymously.';
+      privacy.id=`nudge-privacy-${owner.id}`;
+      const label=document.createElement('label');label.textContent='Anonymous message (optional)';
+      const note=document.createElement('textarea');note.rows=4;note.maxLength=500;note.className='input';
+      note.id=`nudge-message-${owner.id}`;label.htmlFor=note.id;note.setAttribute('aria-describedby',privacy.id);
+      const limit=document.createElement('p');limit.className='muted';limit.textContent='Up to 500 characters. Two nudges per recipient every 24 hours, shared by their gifters.';
+      const actions=document.createElement('div');actions.className='nudge-dialog-actions';
+      const cancel=document.createElement('button');cancel.type='button';cancel.className='btn-lite';cancel.textContent='Cancel';cancel.onclick=()=>dialog.close();
+      const send=document.createElement('button');send.type='submit';send.textContent='Send anonymous nudge';
+      actions.append(cancel,send);form.append(title,privacy,label,note,limit,actions);dialog.append(form);
       let state=initial || {notifications_enabled:false,can_remind:true}, busy=false;
       function paint() {
         bell.replaceChildren();
@@ -23,19 +37,20 @@
         nudge.textContent=state.can_remind?'Send a nudge':'Reminder requested';
         nudge.setAttribute('aria-label',`Send a wishlist reminder to ${owner.name}`);
         nudge.disabled=busy || !state.can_remind;
-        nudge.title='One reminder per recipient every 24 hours, shared by all their gifters';
+        nudge.title='Two nudges per recipient every 24 hours, shared by all their gifters';
         hint.textContent=state.notifications_enabled?'Emails can go to Spam. Mark our messages as “Not spam” to help future updates reach your inbox.':'';
+        if(state.can_remind && state.reminders_remaining!=null)hint.textContent+=(hint.textContent?' ':'')+`${state.reminders_remaining} of 2 nudges available. The limit is shared over 24 hours.`;
         if(!state.can_remind && state.next_reminder_at) {
           const next=new Date(state.next_reminder_at).toLocaleString('en-AU',{dateStyle:'medium',timeStyle:'short'});
           hint.textContent+=(hint.textContent?' ':'')+`Another nudge is available after ${next}.`;
         }
       }
-      async function act(kind) {
+      async function act(kind,message='') {
         busy=true;feedback.textContent=kind==='notifications'?'Updating email preference…':'Requesting a reminder…';paint();
         try {
           const response=await fetch(`/api/wishlist/recipients/${encodeURIComponent(owner.id)}/${kind}`,{
             method:kind==='notifications'?'PUT':'POST',headers:{'Content-Type':'application/json'},
-            body:JSON.stringify({token,...(kind==='notifications'?{enabled:!state.notifications_enabled}:{})}),
+            body:JSON.stringify({token,...(kind==='notifications'?{enabled:!state.notifications_enabled}:{message})}),
           });
           const data=await response.json();
           if(typeof data.can_remind==='boolean')state={...state,...data};
@@ -47,8 +62,10 @@
         finally {busy=false;paint();}
       }
       bell.addEventListener('click',()=>act('notifications'));
-      nudge.addEventListener('click',()=>act('remind'));
-      buttons.append(bell,nudge);toolbar.append(buttons,feedback,hint);card.appendChild(toolbar);paint();
+      nudge.addEventListener('click',()=>{dialog.showModal();note.focus();});
+      form.addEventListener('submit',event=>{event.preventDefault();if(!form.reportValidity())return;dialog.close();act('remind',note.value.trim());});
+      dialog.addEventListener('click',event=>{if(event.target===dialog)dialog.close();});
+      buttons.append(bell,nudge);toolbar.append(buttons,feedback,hint,dialog);card.appendChild(toolbar);paint();
     },
   };
 })();
